@@ -13,9 +13,9 @@ from maker import (
     SceneImageGenerator,
     CreatureImageGenerator,
     ItemImageGenerator,
-    IMAGE_SIZES,
-    QUALITIES,
-    BACKGROUNDS,
+    IMAGE_SIZE,
+    QUALITY,
+    BACKGROUND,
 )
 
 dotenv.load_dotenv()
@@ -53,9 +53,9 @@ def main():
         cmd_parser.add_argument("filename", type=str, help="The filename of the Obsidian note (with .md extension).")
         cmd_parser.add_argument("--model", type=str, default="gpt-image-1-mini", help="The OpenAI model to use for image generation.")
         cmd_parser.add_argument("--context", type=str, default="", help="Additional context prompt for description generation.")
-        cmd_parser.add_argument("--image-size", type=str, choices=IMAGE_SIZES.__args__, default=getattr(cls, 'DEFAULT_IMAGE_SIZE', '1024x1024'), help="Size of the generated image.")
-        cmd_parser.add_argument("--quality", type=str, choices=QUALITIES.__args__, default=getattr(cls, 'DEFAULT_QUALITY', 'medium'), help="Quality of the generated image.")
-        cmd_parser.add_argument("--background", type=str, choices=BACKGROUNDS.__args__, default=getattr(cls, 'DEFAULT_BACKGROUND', 'transparent'), help="Background of the generated image.")
+        cmd_parser.add_argument("--image-size", type=str, choices=IMAGE_SIZE.__args__, default=getattr(cls, 'DEFAULT_IMAGE_SIZE', '1024x1024'), help="Size of the generated image.")
+        cmd_parser.add_argument("--quality", type=str, choices=QUALITY.__args__, default=getattr(cls, 'DEFAULT_QUALITY', 'medium'), help="Quality of the generated image.")
+        cmd_parser.add_argument("--background", type=str, choices=BACKGROUND.__args__, default=getattr(cls, 'DEFAULT_BACKGROUND', 'transparent'), help="Background of the generated image.")
         cmd_parser.add_argument(
             "--format",
             type=str,

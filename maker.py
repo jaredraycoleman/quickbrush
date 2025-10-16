@@ -47,11 +47,11 @@ def remove_background(image_path: pathlib.Path, savepath: pathlib.Path) -> pathl
     savepath.write_bytes(output_image)
     return savepath.resolve()
 
-IMAGE_SIZES = Literal['256x256', '512x512', '1024x1024', '1536x1024', '1024x1536', 'auto']
-BACKGROUNDS = Literal["transparent", "opaque", "auto"]
-QUALITIES = Literal["standard", "low", "medium", "high", "auto"]
+IMAGE_SIZE = Literal['256x256', '512x512', '1024x1024', '1536x1024', '1024x1536', 'auto']
+BACKGROUND = Literal["transparent", "opaque", "auto"]
+QUALITY = Literal["standard", "low", "medium", "high", "auto"]
 class ImageGenerator(ABC):
-    DEFAULT_IMAGE_SIZE: IMAGE_SIZES = "1024x1024"
+    DEFAULT_IMAGE_SIZE: IMAGE_SIZE = "1024x1024"
 
     @abstractmethod
     def get_prompt(self, description: str) -> str:
@@ -75,9 +75,9 @@ class ImageGenerator(ABC):
                        savepath: pathlib.Path,
                        reference_images: List[pathlib.Path] = [],
                        model: str = "gpt-image-1-mini",
-                       image_size: IMAGE_SIZES = "1024x1024",
-                       quality: QUALITIES = "medium",
-                       background: BACKGROUNDS = "transparent") -> pathlib.Path:
+                       image_size: IMAGE_SIZE = "1024x1024",
+                       quality: QUALITY = "medium",
+                       background: BACKGROUND = "transparent") -> pathlib.Path:
         """
         Generate an image based on the provided prompt using OpenAI's API.
 
@@ -242,7 +242,7 @@ class CharacterImageGenerator(ImageGenerator):
         return description
     
 class SceneImageGenerator(ImageGenerator):
-    DEFAULT_IMAGE_SIZE: IMAGE_SIZES = "1536x1024"
+    DEFAULT_IMAGE_SIZE: IMAGE_SIZE = "1536x1024"
     def get_prompt(self, description: str) -> str:
         specific_prompt = f" featuring {description}" if description else ""
         prompt = (

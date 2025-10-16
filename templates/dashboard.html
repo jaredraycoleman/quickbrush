@@ -11,12 +11,70 @@
 
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <h5 class="fw-bold">Brushstroke Usage</h5>
-      <p class="mb-1">Used: <strong>{{ usage }}</strong> brushstrokes</p>
-      <p class="mb-2">Current billing tier: <strong>${{ current_cost }}</strong></p>
+      <h5 class="fw-bold">Credits Balance</h5>
+      <p class="mb-1">Available: <strong>{{ credits_balance }}</strong> brushstrokes</p>
+      {% if credits_balance < 5 %}
+      <div class="alert alert-warning py-2 px-3 mb-2">
+        <small>Low on brushstrokes! Consider purchasing more credits.</small>
+      </div>
+      {% endif %}
+
+      {% if credit_grants %}
+      <div class="mt-2">
+        <small class="text-muted fw-bold">Credit Packages (Expires 30 days from purchase):</small>
+        <ul class="list-unstyled mb-2">
+          {% for grant in credit_grants[:3] %}
+          <li class="small text-muted">
+            • {{ grant.amount }} brushstrokes expire on {{ grant.expires_date }}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+
       <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#pricingModal">
-        View pricing model
+        View pricing & packages
       </button>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <h5 class="fw-bold">Auto-Recharge Settings</h5>
+      <p class="mb-1">
+        Status:
+        {% if auto_recharge_settings.enabled %}
+        <span class="badge bg-success">Enabled</span>
+        {% else %}
+        <span class="badge bg-secondary">Disabled</span>
+        {% endif %}
+      </p>
+      {% if auto_recharge_settings.enabled %}
+      <p class="mb-2 text-muted small">
+        When your balance reaches 0, we'll automatically charge ${{ "%.2f"|format(auto_recharge_settings.amount / 100) }} to add more brushstrokes.
+      </p>
+      {% endif %}
+      <a href="{{ url_for('auto_recharge_settings') }}" class="btn btn-sm btn-outline-secondary">
+        Manage Auto-Recharge
+      </a>
+    </div>
+  </div>
+
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <h5 class="fw-bold">Purchase Credits</h5>
+      <p class="text-muted mb-3">Buy brushstrokes to fuel your creativity! ($0.02 per brushstroke)</p>
+      <div class="d-flex gap-2 flex-wrap">
+        <a href="{{ url_for('buy_credits', amount=500) }}" class="btn btn-outline-primary">
+          $5.00<br><small>(250 brushstrokes)</small>
+        </a>
+        <a href="{{ url_for('buy_credits', amount=1000) }}" class="btn btn-outline-primary">
+          $10.00<br><small>(500 brushstrokes)</small>
+        </a>
+        <a href="{{ url_for('buy_credits', amount=2000) }}" class="btn btn-outline-primary">
+          $20.00<br><small>(1,000 brushstrokes)</small>
+        </a>
+      </div>
     </div>
   </div>
 
@@ -37,7 +95,7 @@
       <div class="modal-body">
         <p>
           Brushstrokes are the magical pigments that power your creations.
-          Each month, your brushstrokes <strong>renew like fresh paints</strong> — use them before they fade!
+          Purchase credits in advance and use them whenever inspiration strikes!
         </p>
 
         <hr>
@@ -56,24 +114,43 @@
           For example:
         </p>
         <ul>
-          <li>With <strong>50 brushstrokes</strong>, you could create 50 quick sketches, 16 medium pieces, or 10 high-quality images.</li>
-          <li>With <strong>250 brushstrokes</strong>, you could paint 250 sketches or about 80 detailed artworks!</li>
+          <li>With <strong>250 brushstrokes</strong>, you could create 250 quick sketches, 83 medium pieces, or 50 high-quality images.</li>
+          <li>With <strong>1,000 brushstrokes</strong>, you could paint 1,000 sketches or about 333 detailed artworks!</li>
         </ul>
 
         <hr>
 
-        <h6 class="fw-bold">💰 Monthly Pricing</h6>
-        <p>Your brushstroke usage is tracked automatically each month. When the month ends, your saved payment method will be <strong>charged automatically</strong> based on your total brushstrokes used:</p>
+        <h6 class="fw-bold">💰 Credit Packages</h6>
+        <p>Purchase brushstrokes in convenient packages at <strong>$0.02 per brushstroke</strong>:</p>
         <ul>
-          <li>1–50 brushstrokes — <strong>$1.00</strong></li>
-          <li>51–250 brushstrokes — <strong>$5.00</strong></li>
-          <li>251–500 brushstrokes — <strong>$10.00</strong></li>
-          <li>501–1,000 brushstrokes — <strong>$20.00</strong></li>
-          <li>1,001+ brushstrokes — <strong>$0.025 each</strong></li>
+          <li><strong>$5.00</strong> — 250 brushstrokes</li>
+          <li><strong>$10.00</strong> — 500 brushstrokes</li>
+          <li><strong>$20.00</strong> — 1,000 brushstrokes</li>
+        </ul>
+
+        <hr>
+
+        <h6 class="fw-bold">🔄 Auto-Recharge</h6>
+        <p>
+          Enable auto-recharge to automatically purchase more brushstrokes when your balance runs out.
+          You can choose your preferred recharge amount ($5, $10, or $20) and disable it anytime.
+        </p>
+
+        <hr>
+
+        <h6 class="fw-bold">⏰ Credit Expiration</h6>
+        <p>
+          All purchased credits expire <strong>30 days from the date of purchase</strong>.
+          This encourages you to use your brushstrokes while they're fresh!
+        </p>
+        <ul>
+          <li>Credits are automatically deducted from the oldest (soonest to expire) batch first</li>
+          <li>You can view your credit expiration dates on the dashboard</li>
+          <li>Expired credits are automatically removed and cannot be used</li>
         </ul>
 
         <p class="text-muted">
-          <em>Think of it like a magical paint well — it refills each month, but unused brushstrokes fade with the moon’s turning. Create freely, and let your imagination do the rest!</em>
+          <em>Think of it like a magical paint well — refill it whenever you need, and let your imagination run wild!</em>
         </p>
       </div>
     </div>

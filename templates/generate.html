@@ -1,0 +1,89 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="wispy-frame">
+  <h3 class="mb-4">
+    <img src="{{ url_for('static', filename='images/paintbrush.webp') }}" 
+         alt="Brush Icon" style="width:22px; height:22px; vertical-align:middle; margin-right:6px;">
+    Create with Quickbrush
+  </h3>
+
+<form id="generate-form" method="post" enctype="multipart/form-data">
+  <div class="mb-3">
+    <label for="gen_type" class="form-label fw-bold">What do you want to paint?</label>
+    <select class="form-select" name="gen_type" id="gen_type">
+      <option value="character" {% if gen_type == 'character' %}selected{% endif %}>🎭 Character</option>
+      <option value="scene" {% if gen_type == 'scene' %}selected{% endif %}>🌄 Scene</option>
+      <option value="creature" {% if gen_type == 'creature' %}selected{% endif %}>🐉 Creature</option>
+      <option value="item" {% if gen_type == 'item' %}selected{% endif %}>🗡️ Item</option>
+    </select>
+    <div class="form-text">
+      Choose what kind of image you’re summoning — a portrait, a landscape, a monster, or an artifact!
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label for="text" class="form-label fw-bold">Description</label>
+    <textarea class="form-control" id="text" name="text" rows="3"
+      placeholder="Describe your subject — Wispy loves detail!">{{ text or '' }}</textarea>
+    <div class="form-text">
+      This is the base — what your subject looks like or what the scene contains.
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label for="prompt" class="form-label fw-bold">Artistic Prompt</label>
+    <textarea class="form-control" id="prompt" name="prompt" rows="2"
+      placeholder="e.g., in golden light, wearing a cloak, in a misty forest.">{{ prompt or '' }}</textarea>
+    <div class="form-text">
+      Add mood, pose, or details that shape how Wispy paints.
+    </div>
+  </div>
+
+  <div class="mb-3">
+    <label for="reference_images" class="form-label fw-bold">Reference Images (optional)</label>
+    <input class="form-control" type="file" name="reference_images" id="reference_images" accept="image/*" multiple>
+    <div class="form-text">Up to 3 images. Wispy uses them for inspiration.</div>
+  </div>
+
+  <div class="mb-3">
+    <label for="quality" class="form-label fw-bold">Quality</label>
+    <select class="form-select" name="quality" id="quality">
+      <option value="low" {% if quality == 'low' %}selected{% endif %}>Low (1 brushstroke — quick sketch)</option>
+      <option value="medium" {% if quality == 'medium' %}selected{% endif %}>Medium (3 brushstrokes — refined)</option>
+      <option value="high" {% if quality == 'high' %}selected{% endif %}>High (5 brushstrokes — masterpiece)</option>
+    </select>
+    <div class="form-text">Higher quality = more detail, more brushstrokes.</div>
+  </div>
+
+  <button type="submit" id="generate-btn" class="btn btn-wispy mt-3">
+    Generate Image
+  </button>
+
+  <div id="loading" class="mt-3 text-muted" style="display:none;">
+    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+    Wispy is painting your masterpiece...
+  </div>
+</form>
+
+{% if generated_image %}
+<hr class="my-4">
+<h5>Your Result</h5>
+<div class="text-center">
+  <img src="{{ generated_image }}" alt="Generated Image" class="img-fluid rounded shadow-sm mb-3" style="max-width:100%; height:auto;">
+  <br>
+  <a href="{{ generated_image }}" download class="btn btn-outline-dark">Download Image</a>
+</div>
+{% endif %}
+
+<script>
+const form = document.getElementById('generate-form');
+const btn = document.getElementById('generate-btn');
+const loading = document.getElementById('loading');
+form.addEventListener('submit', () => {
+  btn.disabled = true;
+  btn.innerText = 'Generating...';
+  loading.style.display = 'block';
+});
+</script>
+
+{% endblock %}
