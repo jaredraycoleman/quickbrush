@@ -56,41 +56,39 @@ def create_portal_session(user):
 
 def get_credits_balance(customer_id: str) -> int:
     """
-    Get the current credits balance for a customer using Stripe Billing credit grants.
-    Returns the balance as an integer (number of brushstrokes).
-    Automatically excludes expired credits.
+    Get the current credits balance for a customer.
+
+    This calculates: (Total Purchased Credits) - (Total Usage Tracked in Metadata)
+
+    Note: Stripe Billing Credits apply to invoices automatically, but we need to
+    track usage ourselves to prevent users from using more than they've purchased.
     """
     try:
-        # Get all active credit grants and sum their amounts
+        # Get total purchased credits from all active grants
         grants = client.v1.billing.credit_grants.list(
             params={"customer": customer_id}
         )
 
-        total_balance = 0
+        total_purchased = 0
         current_time = int(time.time())
 
         for grant in grants.data:
-            # Only count non-expired grants
+            # Only count non-expired, effective grants
             if grant.expires_at and grant.expires_at > current_time:
-                # Check if grant has been voided or fully used
-                if hasattr(grant, 'effective_at') and grant.effective_at:
-                    # Get the amount from the grant
-                    if hasattr(grant, 'amount') and grant.amount:
-                        if grant.amount.get('type') == 'monetary' and grant.amount.get('monetary'):
-                            grant_amount = grant.amount['monetary'].get('value', 0)
+                if hasattr(grant, 'amount') and grant.amount:
+                    if grant.amount.get('type') == 'monetary' and grant.amount.get('monetary'):
+                        grant_amount = grant.amount['monetary'].get('value', 0)
+                        total_purchased += grant_amount
+                        print(f"[Credits] Active grant: {grant_amount} brushstrokes (expires {grant.expires_at})")
 
-                            # Subtract any amount that's been applied
-                            amount_used = 0
-                            if hasattr(grant, 'amount_used') and grant.amount_used:
-                                if grant.amount_used.get('type') == 'monetary' and grant.amount_used.get('monetary'):
-                                    amount_used = grant.amount_used['monetary'].get('value', 0)
+        # Get total usage from customer metadata
+        customer = client.v1.customers.retrieve(customer_id)
+        total_used = int(customer.metadata.get("total_usage", 0))
 
-                            remaining = grant_amount - amount_used
-                            total_balance += remaining
-                            print(f"[Credits] Grant {grant.id}: {grant_amount} total, {amount_used} used, {remaining} remaining")
+        remaining = total_purchased - total_used
+        print(f"[Credits] Balance for {customer_id}: {total_purchased} purchased - {total_used} used = {remaining} remaining")
 
-        print(f"[Credits] Total balance for {customer_id}: {total_balance} brushstrokes")
-        return total_balance
+        return remaining
     except Exception as e:
         print(f"Error fetching credits balance: {e}")
         import traceback
@@ -102,6 +100,8 @@ def add_credits(customer_id: str, amount: int, expires_in_days: int = 30) -> int
     """
     Add credits to a customer's balance using Stripe Billing credit grants.
     Credits will expire after the specified number of days (default: 30 days from purchase).
+
+    The credits are tied to the billing meter so they automatically offset usage charges.
 
     Args:
         customer_id: The Stripe customer ID
@@ -115,7 +115,7 @@ def add_credits(customer_id: str, amount: int, expires_in_days: int = 30) -> int
         # Calculate expiration timestamp (30 days from now)
         expires_at = int(time.time()) + (expires_in_days * 24 * 60 * 60)
 
-        # Create a credit grant
+        # Create a credit grant tied to the billing meter
         # We use monetary credits where 1 cent = 1 brushstroke
         credit_grant = client.v1.billing.credit_grants.create(
             params={
@@ -124,12 +124,13 @@ def add_credits(customer_id: str, amount: int, expires_in_days: int = 30) -> int
                     "type": "monetary",
                     "monetary": {
                         "currency": "usd",
-                        "value": amount,  # brushstrokes (1 brushstroke = 1 cent)
+                        "value": amount,  # brushstrokes (1 brushstroke = 1 cent for simplicity)
                     }
                 },
                 "applicability_config": {
                     "scope": {
-                        "price_type": "metered",  # Can be used for metered billing
+                        # Tie this credit grant to our specific meter
+                        "meter": Config.STRIPE_METER_ID,
                     }
                 },
                 "expires_at": expires_at,
@@ -144,19 +145,23 @@ def add_credits(customer_id: str, amount: int, expires_in_days: int = 30) -> int
         from datetime import datetime, timezone
         expiry_date = datetime.fromtimestamp(expires_at, tz=timezone.utc).strftime('%Y-%m-%d')
 
-        print(f"[Credits] Added {amount} brushstrokes to {customer_id}. New balance: {new_balance}. Expires: {expiry_date}")
+        print(f"[Credits] Added {amount} brushstrokes to {customer_id}. Grant ID: {credit_grant.id}. New balance: {new_balance}. Expires: {expiry_date}")
         return new_balance
 
     except Exception as e:
         print(f"Error adding credits: {e}")
+        import traceback
+        traceback.print_exc()
         # Fall back to current balance
         return get_credits_balance(customer_id)
 
 
 def deduct_credits(customer_id: str, amount: int) -> bool:
     """
-    Deduct credits from a customer's balance using Stripe Billing.
-    Automatically deducts from the oldest (soonest to expire) credits first.
+    Deduct credits by incrementing the total_usage counter in customer metadata.
+
+    This doesn't actually deduct from Stripe - the credit grants will automatically
+    apply to invoices. We just track usage to prevent overspending.
 
     Returns True if successful, False if insufficient credits.
     """
@@ -166,28 +171,29 @@ def deduct_credits(customer_id: str, amount: int) -> bool:
         return False
 
     try:
-        # Create a credit balance transaction to deduct credits
-        transaction = client.v1.billing.credit_balance_transactions.create(
+        # Get current usage from metadata
+        customer = client.v1.customers.retrieve(customer_id)
+        current_usage = int(customer.metadata.get("total_usage", 0))
+        new_usage = current_usage + amount
+
+        # Update the usage counter
+        client.v1.customers.update(
+            customer_id,
             params={
-                "customer": customer_id,
-                "type": "credits_applied",
-                "credit_amount": {
-                    "type": "monetary",
-                    "monetary": {
-                        "currency": "usd",
-                        "value": amount,
-                    }
-                },
-                "description": f"Image generation: {amount} brushstrokes",
+                "metadata": {
+                    "total_usage": str(new_usage)
+                }
             }
         )
 
         new_balance = get_credits_balance(customer_id)
-        print(f"[Credits] Deducted {amount} brushstrokes from {customer_id}. New balance: {new_balance}")
+        print(f"[Credits] Deducted {amount} brushstrokes from {customer_id}. Usage: {new_usage}, Balance: {new_balance}")
         return True
 
     except Exception as e:
         print(f"Error deducting credits: {e}")
+        import traceback
+        traceback.print_exc()
         return False
 
 

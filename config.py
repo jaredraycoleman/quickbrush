@@ -16,6 +16,7 @@ class Config:
     PORTAL_RETURN_URL: str = os.environ["PORTAL_RETURN_URL"]
 
     # Stripe Billing Meter for usage tracking
+    STRIPE_METER_ID: str = os.environ.get("STRIPE_METER_ID", "mtr_test_61TRBk0MUC5LgPChd41LREg1QvyyjDm4")
     STRIPE_METER_EVENT_NAME: str = os.environ.get("STRIPE_METER_EVENT_NAME", "brushstrokes_used")
 
     # Credit packages (in cents) - maps to number of brushstrokes
