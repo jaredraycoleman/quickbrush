@@ -1,13 +1,18 @@
 {% extends "base.html" %}
 {% block content %}
 <div class="wispy-frame">
-  <h3 class="mb-4">
-    <img src="{{ url_for('static', filename='images/paintbrush.webp') }}" 
-         alt="Brush Icon" style="width:22px; height:22px; vertical-align:middle; margin-right:6px;">
-    Create with Quickbrush
-  </h3>
+  <div class="d-flex justify-content-between align-items-center mb-4">
+    <h3 class="mb-0">
+      <img src="{{ url_for('static', filename='images/paintbrush.webp') }}"
+           alt="Brush Icon" style="width:22px; height:22px; vertical-align:middle; margin-right:6px;">
+      Create with Quickbrush
+    </h3>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-sm btn-outline-secondary">
+      Back to Dashboard
+    </a>
+  </div>
 
-<form id="generate-form" method="post" enctype="multipart/form-data">
+<form id="generate-form" method="post" enctype="multipart/form-data" novalidate>
   <div class="mb-3">
     <label for="gen_type" class="form-label fw-bold">What do you want to paint?</label>
     <select class="form-select" name="gen_type" id="gen_type">
@@ -22,12 +27,18 @@
   </div>
 
   <div class="mb-3">
-    <label for="text" class="form-label fw-bold">Description</label>
-    <textarea class="form-control" id="text" name="text" rows="3"
-      placeholder="Describe your subject — Wispy loves detail!">{{ text or '' }}</textarea>
+    <label for="text" class="form-label fw-bold">Description <span class="text-danger">*</span></label>
+    <textarea class="form-control {% if error and not text %}is-invalid{% endif %}"
+              id="text" name="text" rows="3" required
+              placeholder="Describe your subject — Wispy loves detail!">{{ text or '' }}</textarea>
     <div class="form-text">
       This is the base — what your subject looks like or what the scene contains.
     </div>
+    {% if error and not text %}
+    <div class="invalid-feedback">
+      Please provide a description for your image.
+    </div>
+    {% endif %}
   </div>
 
   <div class="mb-3">
@@ -55,34 +66,77 @@
     <div class="form-text">Higher quality = more detail, more brushstrokes.</div>
   </div>
 
-  <button type="submit" id="generate-btn" class="btn btn-wispy mt-3">
-    Generate Image
-  </button>
-
-  <div id="loading" class="mt-3 text-muted" style="display:none;">
-    <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
-    Wispy is painting your masterpiece...
+  <div class="d-flex gap-2 align-items-center mt-3">
+    <button type="submit" id="generate-btn" class="btn btn-wispy">
+      <span id="btn-text">Generate Image</span>
+    </button>
+    <div id="loading" class="text-muted" style="display:none;">
+      <div class="spinner-border spinner-border-sm text-secondary" role="status"></div>
+      <span class="ms-2">Wispy is painting your masterpiece...</span>
+    </div>
   </div>
 </form>
 
 {% if generated_image %}
 <hr class="my-4">
-<h5>Your Result</h5>
-<div class="text-center">
-  <img src="{{ generated_image }}" alt="Generated Image" class="img-fluid rounded shadow-sm mb-3" style="max-width:100%; height:auto;">
-  <br>
-  <a href="{{ generated_image }}" download class="btn btn-outline-dark">Download Image</a>
+<div class="card border-success">
+  <div class="card-header bg-success text-white">
+    <h5 class="mb-0">✨ Your Generated Image</h5>
+  </div>
+  <div class="card-body">
+    {% if description %}
+    <div class="alert alert-light mb-3">
+      <small class="text-muted"><strong>AI Description:</strong></small><br>
+      <small>{{ description }}</small>
+    </div>
+    {% endif %}
+    <div class="text-center">
+      <img src="{{ generated_image }}" alt="Generated Image"
+           class="img-fluid rounded shadow-sm mb-3"
+           style="max-width:100%; height:auto; max-height:600px;">
+      <br>
+      <div class="d-flex gap-2 justify-content-center">
+        <a href="{{ generated_image }}" download class="btn btn-outline-dark">
+          <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-download" viewBox="0 0 16 16">
+            <path d="M.5 9.9a.5.5 0 0 1 .5.5v2.5a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-2.5a.5.5 0 0 1 1 0v2.5a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2v-2.5a.5.5 0 0 1 .5-.5z"/>
+            <path d="M7.646 11.854a.5.5 0 0 0 .708 0l3-3a.5.5 0 0 0-.708-.708L8.5 10.293V1.5a.5.5 0 0 0-1 0v8.793L5.354 8.146a.5.5 0 1 0-.708.708l3 3z"/>
+          </svg>
+          Download Image
+        </a>
+        <button type="button" class="btn btn-wispy" onclick="document.getElementById('generate-form').scrollIntoView({behavior: 'smooth'})">
+          Generate Another
+        </button>
+      </div>
+    </div>
+  </div>
 </div>
 {% endif %}
 
 <script>
 const form = document.getElementById('generate-form');
 const btn = document.getElementById('generate-btn');
+const btnText = document.getElementById('btn-text');
 const loading = document.getElementById('loading');
-form.addEventListener('submit', () => {
+
+// Form validation
+form.addEventListener('submit', (e) => {
+  const textArea = document.getElementById('text');
+  if (!textArea.value.trim()) {
+    e.preventDefault();
+    textArea.classList.add('is-invalid');
+    textArea.focus();
+    return false;
+  }
+
+  // Show loading state
   btn.disabled = true;
-  btn.innerText = 'Generating...';
-  loading.style.display = 'block';
+  btnText.innerText = 'Generating...';
+  loading.style.display = 'inline-block';
+});
+
+// Remove invalid class when user starts typing
+document.getElementById('text').addEventListener('input', function() {
+  this.classList.remove('is-invalid');
 });
 </script>
 

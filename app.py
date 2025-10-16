@@ -222,32 +222,76 @@ class GenerateRequest(BaseModel):
 @login_required
 def generate():
     if request.method == "POST":
+        # Capture form data for state preservation
+        form_data = {
+            "text": request.form.get("text", ""),
+            "prompt": request.form.get("prompt", ""),
+            "quality": request.form.get("quality", "medium"),
+            "size": request.form.get("size", "1024x1024"),
+            "gen_type": request.form.get("gen_type", "character"),
+        }
+
+        # Validate input data
         try:
-            # Build the request model from form inputs
             data = GenerateRequest(
-                text=request.form.get("text", ""),
-                prompt=request.form.get("prompt", ""),
-                quality=request.form.get("quality", "medium"), # type: ignore
-                size=request.form.get("size", "medium"), # type: ignore
+                text=form_data["text"],
+                prompt=form_data["prompt"],
+                quality=form_data["quality"], # type: ignore
+                size=form_data["size"], # type: ignore
             )
         except ValidationError as e:
-            # Catch and display validation errors from Pydantic
             for err in e.errors():
-                flash(f"Validation error in '{err['loc'][0]}': {err['msg']}", "danger")
-            return redirect(url_for("generate"))
+                field = err['loc'][0] if err['loc'] else 'unknown'
+                flash(f"Invalid {field}: {err['msg']}", "danger")
+            return render_template("generate.html", **form_data, error=True)
+
+        # Validate description is not empty
+        if not data.text.strip():
+            flash("Please provide a description for your image.", "warning")
+            return render_template("generate.html", **form_data, error=True)
+
+        # Get customer and check credits
+        user = session["user"]
+        try:
+            cust = get_or_create_customer(user)
+        except Exception as e:
+            flash(f"Failed to retrieve customer information: {str(e)}", "danger")
+            return render_template("generate.html", **form_data, error=True)
+
+        brushstrokes_needed = token_cost(data.quality)
+        current_balance = get_credits_balance(cust.id)
+
+        if current_balance < brushstrokes_needed:
+            flash(
+                f"Insufficient credits! You need {brushstrokes_needed} brushstrokes but only have {current_balance}. "
+                f'<a href="{url_for("dashboard")}" class="alert-link">Purchase more credits</a>.',
+                "warning"
+            )
+            return render_template("generate.html", **form_data, error=True)
 
         # Handle uploaded reference images (max 3)
-        uploaded_files = request.files.getlist("reference_images")
         reference_paths = []
-        for file in uploaded_files[:3]:
-            if file and file.filename:
-                filename = secure_filename(file.filename)
-                save_path = GENERATED_DIR / f"{uuid.uuid4()}_{filename}"
-                file.save(save_path)
-                reference_paths.append(save_path)
+        uploaded_files = request.files.getlist("reference_images")
+        try:
+            for file in uploaded_files[:3]:
+                if file and file.filename:
+                    filename = secure_filename(file.filename)
+                    if not filename:
+                        continue
+                    # Validate file extension
+                    allowed_extensions = {'.png', '.jpg', '.jpeg', '.webp', '.gif'}
+                    if not any(filename.lower().endswith(ext) for ext in allowed_extensions):
+                        flash(f"Invalid file type for '{filename}'. Allowed: PNG, JPG, JPEG, WEBP, GIF", "warning")
+                        continue
+                    save_path = GENERATED_DIR / f"{uuid.uuid4()}_{filename}"
+                    file.save(save_path)
+                    reference_paths.append(save_path)
+        except Exception as e:
+            flash(f"Error uploading reference images: {str(e)}", "warning")
+            # Continue without reference images
 
         # Choose generator type
-        gen_type = request.form.get("gen_type", "character")
+        gen_type = form_data["gen_type"]
         if gen_type == "scene":
             gen = SceneImageGenerator()
         elif gen_type == "creature":
@@ -257,52 +301,76 @@ def generate():
         else:
             gen = CharacterImageGenerator()
 
+        # Generate the image
+        description = None
+        image_path = None
         try:
-            # Check if user has enough credits BEFORE generating
-            user = session["user"]
-            cust = get_or_create_customer(user)
-            brushstrokes_needed = token_cost(data.quality)
-            current_balance = get_credits_balance(cust.id)
+            # Step 1: Generate description from text
+            try:
+                description = gen.get_description(text=data.text, prompt=data.prompt)
+            except Exception as e:
+                flash(f"Failed to generate image description: {str(e)}", "danger")
+                return render_template("generate.html", **form_data, error=True)
 
-            if current_balance < brushstrokes_needed:
-                flash(
-                    f"Insufficient credits! You need {brushstrokes_needed} brushstrokes but only have {current_balance}. "
-                    f"Please purchase more credits.",
-                    "warning"
-                )
-                return redirect(url_for("dashboard"))
-
-            # Generate the image
-            description = gen.get_description(text=data.text, prompt=data.prompt)
+            # Step 2: Generate the image
             output_path = GENERATED_DIR / f"generated_{uuid.uuid4()}.png"
-            image_path = gen.generate_image(
-                description=description,
-                savepath=output_path,
-                reference_images=reference_paths,
-                image_size=data.size,
+            try:
+                image_path = gen.generate_image(
+                    description=description,
+                    savepath=output_path,
+                    reference_images=reference_paths,
+                    image_size=data.size,
+                    quality=data.quality,
+                )
+            except Exception as e:
+                error_msg = str(e)
+                # Provide more helpful error messages for common failures
+                if "rate_limit" in error_msg.lower():
+                    flash("OpenAI rate limit reached. Please wait a moment and try again.", "warning")
+                elif "insufficient_quota" in error_msg.lower():
+                    flash("OpenAI API quota exceeded. Please contact support.", "danger")
+                elif "invalid_api_key" in error_msg.lower():
+                    flash("API configuration error. Please contact support.", "danger")
+                else:
+                    flash(f"Failed to generate image: {error_msg}", "danger")
+                return render_template("generate.html", **form_data, error=True)
+
+            # Step 3: Record usage (deduct credits)
+            try:
+                success = record_usage(cust.id, brushstrokes_needed)
+                if not success:
+                    # This shouldn't happen as we already checked balance, but handle it anyway
+                    flash("Warning: Image generated but credits may not have been deducted. Please check your balance.", "warning")
+            except Exception as e:
+                flash(f"Warning: Image generated but failed to record usage: {str(e)}", "warning")
+
+            # Success! Show the generated image
+            flash(f"Image generated successfully! Used {brushstrokes_needed} brushstrokes.", "success")
+            return render_template(
+                "generate.html",
+                generated_image=url_for("static", filename=f"generated/{image_path.name}"),
                 quality=data.quality,
+                description=description,
+                text=data.text,
+                prompt=data.prompt,
+                gen_type=gen_type,
             )
 
-            # Record usage (deducts credits and may trigger auto-recharge)
-            success = record_usage(cust.id, brushstrokes_needed)
-            if not success:
-                flash("Failed to record usage. Please contact support.", "danger")
-                return redirect(url_for("generate"))
-
         except Exception as e:
-            flash(f"Error generating image: {str(e)}", "danger")
-            return redirect(url_for("generate"))
+            # Catch-all for unexpected errors
+            flash(f"Unexpected error: {str(e)}", "danger")
+            return render_template("generate.html", **form_data, error=True)
 
-        return render_template(
-            "generate.html",
-            generated_image=url_for("static", filename=f"generated/{image_path.name}"),
-            quality=data.quality,
-            description=description,
-            text=data.text,
-            prompt=data.prompt,
-            gen_type=gen_type,
-        )
+        finally:
+            # Clean up reference images after generation (success or failure)
+            for ref_path in reference_paths:
+                try:
+                    if ref_path.exists():
+                        ref_path.unlink()
+                except Exception:
+                    pass  # Ignore cleanup errors
 
+    # GET request - show empty form
     return render_template("generate.html", gen_type="character")
 
 # ---------------------------------------------------------

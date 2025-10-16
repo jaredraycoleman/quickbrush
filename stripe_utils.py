@@ -61,20 +61,40 @@ def get_credits_balance(customer_id: str) -> int:
     Automatically excludes expired credits.
     """
     try:
-        # Get the customer's credit balance summary
-        balance = client.v1.customers.retrieve_credit_balance(customer_id)
+        # Get all active credit grants and sum their amounts
+        grants = client.v1.billing.credit_grants.list(
+            params={"customer": customer_id}
+        )
 
-        # Sum up all monetary credits (we use USD cents = brushstrokes)
         total_balance = 0
-        if hasattr(balance, 'monetary_credit_balance') and balance.monetary_credit_balance:
-            for currency, amount_dict in balance.monetary_credit_balance.items():
-                # Amount is in cents, we treat 1 cent = 1 brushstroke
-                total_balance += amount_dict.get('amount', 0)
+        current_time = int(time.time())
 
-        print(f"[Credits] Balance for {customer_id}: {total_balance} brushstrokes")
+        for grant in grants.data:
+            # Only count non-expired grants
+            if grant.expires_at and grant.expires_at > current_time:
+                # Check if grant has been voided or fully used
+                if hasattr(grant, 'effective_at') and grant.effective_at:
+                    # Get the amount from the grant
+                    if hasattr(grant, 'amount') and grant.amount:
+                        if grant.amount.get('type') == 'monetary' and grant.amount.get('monetary'):
+                            grant_amount = grant.amount['monetary'].get('value', 0)
+
+                            # Subtract any amount that's been applied
+                            amount_used = 0
+                            if hasattr(grant, 'amount_used') and grant.amount_used:
+                                if grant.amount_used.get('type') == 'monetary' and grant.amount_used.get('monetary'):
+                                    amount_used = grant.amount_used['monetary'].get('value', 0)
+
+                            remaining = grant_amount - amount_used
+                            total_balance += remaining
+                            print(f"[Credits] Grant {grant.id}: {grant_amount} total, {amount_used} used, {remaining} remaining")
+
+        print(f"[Credits] Total balance for {customer_id}: {total_balance} brushstrokes")
         return total_balance
     except Exception as e:
         print(f"Error fetching credits balance: {e}")
+        import traceback
+        traceback.print_exc()
         return 0
 
 
