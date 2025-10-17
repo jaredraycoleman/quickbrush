@@ -178,9 +178,9 @@ class User(Document):
         Returns:
             Total brushstrokes = subscription allowance remaining + purchased packs
         """
-        subscription_used = self.subscription.allowance_used_this_period if self.subscription else 0
-        subscription_remaining = max(0, subscription_allowance - subscription_used)
-        return subscription_remaining + self.purchased_brushstrokes
+        subscription_used = self.subscription.allowance_used_this_period if self.subscription else 0 # type: ignore
+        subscription_remaining = max(0, subscription_allowance - subscription_used) # type: ignore
+        return subscription_remaining + self.purchased_brushstrokes # type: ignore
 
     def use_brushstrokes(self, amount: int, subscription_allowance: int = 0) -> bool:
         """
@@ -199,24 +199,24 @@ class User(Document):
 
         # First, use subscription allowance
         if self.subscription:
-            subscription_used = self.subscription.allowance_used_this_period
-            allowance_remaining = max(0, subscription_allowance - subscription_used)
+            subscription_used = self.subscription.allowance_used_this_period # type: ignore
+            allowance_remaining = max(0, subscription_allowance - subscription_used) # type: ignore
 
             if allowance_remaining > 0:
                 used_from_allowance = min(amount, allowance_remaining)
-                self.subscription.allowance_used_this_period += used_from_allowance
+                self.subscription.allowance_used_this_period += used_from_allowance # type: ignore
                 amount -= used_from_allowance
 
         # Then use purchased packs
         if amount > 0:
-            self.purchased_brushstrokes -= amount
+            self.purchased_brushstrokes -= amount # type: ignore
 
         self.updated_at = datetime.now(timezone.utc)
         return True
 
     def add_purchased_brushstrokes(self, amount: int):
         """Add brushstrokes from one-time pack purchase."""
-        self.purchased_brushstrokes += amount
+        self.purchased_brushstrokes += amount # type: ignore
         self.updated_at = datetime.now(timezone.utc)
 
     def set_subscription_id(self, stripe_subscription_id: str, period_start: datetime):
@@ -228,19 +228,19 @@ class User(Document):
         if not self.subscription:
             self.subscription = SubscriptionInfo()
 
-        self.subscription.stripe_subscription_id = stripe_subscription_id
-        self.subscription.current_period_start = period_start
-        self.subscription.allowance_used_this_period = 0
-        self.subscription.updated_at = datetime.now(timezone.utc)
+        self.subscription.stripe_subscription_id = stripe_subscription_id # type: ignore
+        self.subscription.current_period_start = period_start # type: ignore
+        self.subscription.allowance_used_this_period = 0 # type: ignore
+        self.subscription.updated_at = datetime.now(timezone.utc) # type: ignore
         self.updated_at = datetime.now(timezone.utc)
 
     def clear_subscription(self):
         """Remove subscription reference when it's canceled/deleted."""
         if self.subscription:
-            self.subscription.stripe_subscription_id = None
-            self.subscription.current_period_start = None
-            self.subscription.allowance_used_this_period = 0
-            self.subscription.updated_at = datetime.now(timezone.utc)
+            self.subscription.stripe_subscription_id = None # type: ignore
+            self.subscription.current_period_start = None # type: ignore
+            self.subscription.allowance_used_this_period = 0 # type: ignore
+            self.subscription.updated_at = datetime.now(timezone.utc) # type: ignore
             self.updated_at = datetime.now(timezone.utc)
 
 
@@ -312,7 +312,7 @@ class APIKey(Document):
     def record_usage(self):
         """Record that this key was used."""
         self.last_used_at = datetime.now(timezone.utc)
-        self.total_requests += 1
+        self.total_requests += 1 # type: ignore
 
 
 # ========================================
@@ -475,7 +475,7 @@ class Log(Document):
     }
 
     def __str__(self):
-        return f"Log({self.level}, {self.message[:50]})"
+        return f"Log({self.level}, {self.message[:50]})" # type: ignore
 
 
 # ========================================
@@ -485,7 +485,7 @@ class Log(Document):
 def get_user_by_auth0_sub(auth0_sub: str) -> Optional[User]:
     """Get user by Auth0 sub (user ID)."""
     try:
-        return User.objects(auth0_sub=auth0_sub).first()
+        return User.objects(auth0_sub=auth0_sub).first() # type: ignore
     except Exception as e:
         print(f"Error fetching user by auth0_sub: {e}")
         return None
@@ -494,13 +494,13 @@ def get_user_by_auth0_sub(auth0_sub: str) -> Optional[User]:
 def get_user_by_stripe_customer_id(customer_id: str) -> Optional[User]:
     """Get user by Stripe customer ID."""
     try:
-        return User.objects(stripe_customer_id=customer_id).first()
+        return User.objects(stripe_customer_id=customer_id).first() # type: ignore
     except Exception as e:
         print(f"Error fetching user by stripe_customer_id: {e}")
         return None
 
 
-def get_or_create_user(auth0_sub: str, email: str, name: str = None, picture: str = None) -> User:
+def get_or_create_user(auth0_sub: str, email: str, name: str | None = None, picture: str | None = None) -> User:
     """Get or create a user by Auth0 sub."""
     user = get_user_by_auth0_sub(auth0_sub)
     if user:
@@ -535,7 +535,7 @@ def verify_api_key(key_id: str, secret: str) -> Optional[APIKey]:
     Returns None if key is invalid, inactive, or expired.
     """
     try:
-        api_key = APIKey.objects(key_id=key_id, is_active=True).first()
+        api_key = APIKey.objects(key_id=key_id, is_active=True).first() # type: ignore
         if not api_key:
             return None
 

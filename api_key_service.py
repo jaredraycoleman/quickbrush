@@ -64,9 +64,9 @@ def get_user_api_keys(user: User, include_inactive: bool = False) -> List[APIKey
         List of APIKey objects
     """
     if include_inactive:
-        keys = APIKey.objects(user=user).order_by('-created_at')
+        keys = APIKey.objects(user=user).order_by('-created_at') # type: ignore
     else:
-        keys = APIKey.objects(user=user, is_active=True).order_by('-created_at')
+        keys = APIKey.objects(user=user, is_active=True).order_by('-created_at') # type: ignore
 
     return list(keys)
 
@@ -152,4 +152,4 @@ def authenticate_api_key(authorization: str) -> Optional[User]:
     api_key.record_usage()
     api_key.save()
 
-    return api_key.user
+    return api_key.user # type: ignore

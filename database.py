@@ -49,7 +49,7 @@ def test_connection():
     try:
         from models import User
         # Try to count users (will work even if collection is empty)
-        User.objects.count()
+        User.objects.count() # type: ignore
         logger.info("MongoDB connection test successful")
         return True
     except Exception as e:

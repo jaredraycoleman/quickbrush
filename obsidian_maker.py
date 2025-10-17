@@ -83,15 +83,16 @@ def main():
         description = generator.get_description(text, args.context or getattr(subclass, "DEFAULT_CONTEXT_PROMPT", ""))
         logging.info(f"Generated description: {description}")
         savepath = thisdir / f"{args.command}s" / f"{args.filename}_{uuid.uuid4().hex[:8]}.{args.format}"
-        generator.generate_image(
+        image_bytes = generator.generate_image(
             description=description,
-            savepath=savepath,
             reference_images=embedded_files,
             model=args.model,
             image_size=args.image_size,
             quality=args.quality,
             background=args.background
         )
+        savepath.parent.mkdir(parents=True, exist_ok=True)
+        savepath.write_bytes(image_bytes)
         logging.info(f"{args.command.capitalize()} generated and saved at: {savepath.resolve()}")
 
 

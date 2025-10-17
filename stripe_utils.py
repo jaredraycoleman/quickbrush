@@ -77,7 +77,7 @@ def get_subscription_info(user: User) -> Tuple[Optional[dict], int]:
 
             if latest_invoice:
                 # Get invoice items (includes proration credits/charges)
-                invoice_items = client.v1.invoice_items.list(params={"invoice": latest_invoice.id})
+                invoice_items = client.v1.invoice_items.list(params={"invoice": latest_invoice.id}) # type: ignore
 
                 # Get all price IDs from the invoice and find the highest tier
                 tiers = Config.get_subscription_tiers()
@@ -178,11 +178,11 @@ def get_or_create_stripe_customer(user: User) -> str:
     try:
         customer = client.v1.customers.create(
             params={
-                "email": user.email,
-                "name": user.name,
+                "email": str(user.email),
+                "name": str(user.name),
                 "metadata": {
-                    "user_id": str(user.id),
-                    "auth0_sub": user.auth0_sub,
+                    "user_id": str(user.id), # type: ignore
+                    "auth0_sub": str(user.auth0_sub),
                 }
             }
         )
@@ -265,7 +265,7 @@ def create_pack_checkout(user: User, price_id: str, success_url: str, cancel_url
                 "success_url": success_url,
                 "cancel_url": cancel_url,
                 "metadata": {
-                    "user_id": str(user.id),
+                    "user_id": str(user.id), # type: ignore
                     "brushstrokes": str(brushstrokes),
                     "purchase_type": "pack",
                 }
@@ -303,6 +303,10 @@ def handle_checkout_completed(session_id: str) -> bool:
             logger.warning(f"Checkout session {session_id} not paid yet")
             return False
 
+        if not session.metadata:
+            logger.error(f"No metadata in checkout session: {session_id}")
+            return False
+
         # Get user
         user_id = session.metadata.get("user_id")
         if not user_id:
@@ -310,7 +314,7 @@ def handle_checkout_completed(session_id: str) -> bool:
             return False
 
         from models import User
-        user = User.objects(id=user_id).first()
+        user = User.objects(id=user_id).first() # type: ignore
         if not user:
             logger.error(f"User not found for checkout session: {session_id}")
             return False
@@ -325,16 +329,16 @@ def handle_checkout_completed(session_id: str) -> bool:
 
             # Retrieve subscription with expand parameter to get all fields
             subscription = client.v1.subscriptions.retrieve(
-                subscription_id,
+                str(subscription_id),
                 params={"expand": ["items.data.price"]}
             )
 
             # Get price ID and determine tier
             # In Stripe SDK v13+, we need to list subscription items separately
-            subscription_items = client.v1.subscription_items.list(params={"subscription": subscription_id})
+            subscription_items = client.v1.subscription_items.list(params={"subscription": str(subscription_id)})
             # Convert to list to access first item
-            items_list = list(subscription_items)
-            price_id = items_list[0].price.id
+            items_list = subscription_items
+            price_id = items_list.data[0].price.id
             tiers = Config.get_subscription_tiers()
 
             if price_id not in tiers:
@@ -422,13 +426,13 @@ def check_and_renew_subscription(user: User) -> bool:
     Returns:
         True if subscription was renewed, False otherwise
     """
-    if not user.subscription or not user.subscription.stripe_subscription_id:
+    if not user.subscription or not user.subscription.stripe_subscription_id: # type: ignore
         return False
 
     # Fetch subscription from Stripe to check if period has changed
     try:
         subscription = client.v1.subscriptions.retrieve(
-            user.subscription.stripe_subscription_id,
+            user.subscription.stripe_subscription_id, # type: ignore
             params={"expand": ["items.data.price"]}
         )
 
@@ -449,9 +453,9 @@ def check_and_renew_subscription(user: User) -> bool:
         stripe_period_start_dt = datetime.fromtimestamp(stripe_period_start, tz=timezone.utc)
 
         # Compare with stored period start
-        stored_period_start = user.subscription.current_period_start
-        if stored_period_start and stored_period_start.tzinfo is None:
-            stored_period_start = stored_period_start.replace(tzinfo=timezone.utc)
+        stored_period_start = user.subscription.current_period_start # type: ignore
+        if stored_period_start and stored_period_start.tzinfo is None: # type: ignore
+            stored_period_start = stored_period_start.replace(tzinfo=timezone.utc) # type: ignore
 
         # If periods match, no renewal needed
         if stored_period_start and stored_period_start == stripe_period_start_dt:
@@ -459,9 +463,9 @@ def check_and_renew_subscription(user: User) -> bool:
 
         # Period has changed! Reset the allowance
         # Get the tier and allowance
-        subscription_items = client.v1.subscription_items.list(params={"subscription": user.subscription.stripe_subscription_id})
-        items_list = list(subscription_items)
-        price_id = items_list[0].price.id
+        subscription_items = client.v1.subscription_items.list(params={"subscription": user.subscription.stripe_subscription_id}) # type: ignore
+        items_list = subscription_items
+        price_id = items_list.data[0].price.id
         tiers = Config.get_subscription_tiers()
 
         if price_id not in tiers:
@@ -471,7 +475,7 @@ def check_and_renew_subscription(user: User) -> bool:
         tier_name, allowance = tiers[price_id]
 
         # Reset the allowance for the new period
-        user.subscription.reset_allowance(stripe_period_start_dt)
+        user.subscription.reset_allowance(stripe_period_start_dt) # type: ignore
         user.save()
 
         logger.info(f"Renewed subscription for user {user.email}: {tier_name} ({allowance} brushstrokes/month)")
@@ -488,7 +492,7 @@ def check_and_renew_subscription(user: User) -> bool:
 # USAGE TRACKING
 # ========================================
 
-def record_generation(user: User, brushstrokes_used: int, generation_id: str = None) -> bool:
+def record_generation(user: User, brushstrokes_used: int, generation_id: str | None = None) -> bool:
     """
     Record image generation and deduct brushstrokes.
 
@@ -517,7 +521,7 @@ def record_generation(user: User, brushstrokes_used: int, generation_id: str = N
 
     # Record transaction
     from models import Generation
-    generation = Generation.objects(id=generation_id).first() if generation_id else None
+    generation = Generation.objects(id=generation_id).first() if generation_id else None # type: ignore
 
     transaction = BrushstrokeTransaction(
         user=user,

@@ -28,7 +28,7 @@ def enforce_image_limit(user: User) -> int:
     """
     try:
         # Get all completed generations for this user, ordered by creation date (newest first)
-        all_generations = Generation.objects(
+        all_generations = Generation.objects( # type: ignore
             user=user,
             status="completed",
             image_data__ne=None  # Only count generations with image data
@@ -135,7 +135,7 @@ def get_user_generations(
     Returns:
         list: List of Generation objects
     """
-    query = Generation.objects(user=user)
+    query = Generation.objects(user=user) # type: ignore
 
     if not include_without_images:
         query = query.filter(image_data__ne=None)
@@ -160,7 +160,7 @@ def get_generation_by_id(generation_id: str, user: User) -> Optional[Generation]
         Generation object or None
     """
     try:
-        generation = Generation.objects(id=generation_id, user=user).first()
+        generation = Generation.objects(id=generation_id, user=user).first() # type: ignore
         return generation
     except Exception as e:
         logger.error(f"Error getting generation {generation_id}: {e}")
@@ -178,7 +178,7 @@ def get_remaining_image_slots(user: User) -> int:
         int: Number of remaining slots (0 to MAX_IMAGES_PER_USER)
     """
     try:
-        current_count = Generation.objects(
+        current_count = Generation.objects( # type: ignore
             user=user,
             status="completed",
             image_data__ne=None

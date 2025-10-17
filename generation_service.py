@@ -18,42 +18,9 @@ from image_service import save_generation_with_image, get_remaining_image_slots
 from stripe_utils import get_subscription_info, record_generation
 from typing import Optional, Tuple, List
 import pathlib
-import tempfile
 import logging
-from PIL import Image
-from io import BytesIO
-import base64
 
 logger = logging.getLogger(__name__)
-
-
-def convert_image_to_png_base64(image_path: pathlib.Path) -> str:
-    """
-    Convert an image file to base64-encoded PNG.
-
-    Args:
-        image_path: Path to the image file
-
-    Returns:
-        str: Base64-encoded PNG string
-    """
-    try:
-        with Image.open(image_path) as img:
-            # Convert to RGB if necessary (in case of RGBA, CMYK, etc.)
-            if img.mode not in ('RGB', 'L'):
-                img = img.convert('RGB')
-
-            # Save as PNG to BytesIO buffer
-            buffer = BytesIO()
-            img.save(buffer, format='PNG')
-            png_bytes = buffer.getvalue()
-
-            # Encode to base64
-            b64_string = base64.b64encode(png_bytes).decode('utf-8')
-            return b64_string
-    except Exception as e:
-        logger.error(f"Error converting image to base64: {e}")
-        raise
 
 
 class GenerationResult:
@@ -105,7 +72,7 @@ def generate_image(
     quality: str,
     size: str = "1024x1024",
     prompt: str = "",
-    reference_image_paths: List[pathlib.Path] = None,
+    reference_image_paths: List[pathlib.Path] | None = None,
     source: str = "web",
     api_key=None
 ) -> GenerationResult:
@@ -160,9 +127,13 @@ def generate_image(
         )
 
     try:
-        # Step 1: Generate refined description
+        # Step 1: Generate refined description (include reference images so description is consistent)
         try:
-            description = generator.get_description(text=text, prompt=prompt)
+            description = generator.get_description(
+                text=text,
+                prompt=prompt,
+                reference_images=reference_image_paths
+            )
         except Exception as e:
             logger.error(f"Error generating description: {e}")
             return GenerationResult(
@@ -171,27 +142,11 @@ def generate_image(
                 brushstrokes_remaining=current_balance
             )
 
-        # Convert reference image paths to base64 PNG strings
-        reference_images_b64 = None
-        if reference_image_paths:
-            try:
-                reference_images_b64 = [
-                    convert_image_to_png_base64(path)
-                    for path in reference_image_paths
-                ]
-            except Exception as e:
-                logger.error(f"Error converting reference images to base64: {e}")
-                return GenerationResult(
-                    success=False,
-                    error_message=f"Failed to process reference images: {str(e)}",
-                    brushstrokes_remaining=current_balance
-                )
-
         # Step 2: Generate image (returns WebP bytes)
         try:
             image_data = generator.generate_image(
                 description=description,
-                reference_images_b64=reference_images_b64,
+                reference_images=reference_image_paths,
                 image_size=size,  # type: ignore
                 quality=quality,  # type: ignore
             )
@@ -239,7 +194,7 @@ def generate_image(
 
         # Step 4: Record usage (deduct brushstrokes)
         try:
-            success = record_generation(user, brushstrokes_needed, str(generation.id))
+            success = record_generation(user, brushstrokes_needed, str(generation.id)) # type: ignore
             if not success:
                 logger.warning("Image generated but brushstrokes may not have been deducted")
                 # Continue anyway - image was generated successfully
@@ -256,7 +211,7 @@ def generate_image(
 
         return GenerationResult(
             success=True,
-            generation_id=str(generation.id),
+            generation_id=str(generation.id), # type: ignore
             refined_description=description,
             brushstrokes_used=brushstrokes_needed,
             brushstrokes_remaining=remaining_brushstrokes,

@@ -145,13 +145,16 @@ def dashboard():
 
     if subscription_info_tuple and subscription_info_tuple[0]:
         sub_dict, monthly_allowance = subscription_info_tuple
-        allowance_used = user.subscription.allowance_used_this_period if user.subscription else 0
+        allowance_used = user.subscription.allowance_used_this_period if user.subscription else 0 # type: ignore
+        if not sub_dict:
+            flash("Error retrieving subscription information", "danger")
+            return redirect(url_for("login"))
         subscription_info = {
             "tier": sub_dict["tier"],
             "status": sub_dict["status"],
             "monthly_allowance": monthly_allowance,
             "allowance_used": allowance_used,
-            "allowance_remaining": max(0, monthly_allowance - allowance_used),
+            "allowance_remaining": max(0, monthly_allowance - allowance_used), # type: ignore
             "current_period_end": sub_dict["current_period_end"],
             "cancel_at_period_end": sub_dict["cancel_at_period_end"],
         }
@@ -333,7 +336,7 @@ def revoke_api_key_route(key_id: str):
         return redirect(url_for("dashboard"))
 
     from models import APIKey
-    api_key = APIKey.objects(key_id=key_id, user=user).first()
+    api_key = APIKey.objects(key_id=key_id, user=user).first() # type: ignore
 
     if not api_key:
         flash("API key not found", "danger")
@@ -504,7 +507,7 @@ def generate():
                 )
             else:
                 # Generation failed
-                flash(result.error_message, "danger")
+                flash(result.error_message or "Unknown error", "danger")
                 return render_template("generate.html", **form_data, error=True)
 
         finally:
@@ -538,7 +541,7 @@ def serve_image(generation_id: str):
 
     # Serve the WebP image
     return send_file(
-        BytesIO(generation.image_data),
+        BytesIO(generation.image_data), # type: ignore
         mimetype="image/webp",
         as_attachment=False,
         download_name=f"generated_{generation_id}.webp"
@@ -579,7 +582,7 @@ try:
 
     # Mount FastAPI app at /api using a2wsgi to convert ASGI to WSGI
     app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
-        "/api": ASGIMiddleware(fastapi_app)
+        "/api": ASGIMiddleware(fastapi_app) # type: ignore
     })
 except Exception as e:
     print(f"Warning: Could not mount FastAPI app: {e}")

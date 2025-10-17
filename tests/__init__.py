@@ -1,3 +1,0 @@
-"""
-Quickbrush API Test Suite
-"""

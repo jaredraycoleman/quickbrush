@@ -1,14 +1,14 @@
 import logging
 import pathlib
-from typing import Iterable, List, Literal, Optional
+from typing import Dict, Iterable, List, Literal, Optional, Union
 from base64 import b64decode, b64encode
 from rembg import remove
 from abc import ABC, abstractmethod
 from PIL import Image
-import tempfile
 from openai import OpenAI
 import os
 from io import BytesIO
+import tempfile
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -21,6 +21,14 @@ def token_cost(quality: str) -> int:
     if quality == "high":
         return 5
     return 3  # default medium
+
+def convert_for_openai(path: pathlib.Path, format: str) -> pathlib.Path:
+    if path.suffix.lower() == f".{format}":
+        return path.resolve(strict=True)
+    image = Image.open(path)
+    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{format}") as temp_file:
+        image.save(temp_file, format=format.upper())
+        return pathlib.Path(temp_file.name)
 
 def remove_background(image_path: pathlib.Path, savepath: pathlib.Path) -> pathlib.Path:
     """
@@ -49,12 +57,13 @@ class ImageGenerator(ABC):
         raise NotImplementedError
     
     @abstractmethod
-    def get_description(self, text: str, prompt: str) -> str:
+    def get_description(self, text: str, prompt: str, reference_images: Optional[List[pathlib.Path]] = None) -> str:
         """Extract a description from the provided text. The prompt provides context for the description to be generated (e.g., style change, specific outfit, etc.).
-        
+
         Args:
             text (str): The text containing the character's description.
             prompt (str): The context prompt for the description.
+            reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
 
         Returns:
             str: A concise description.
@@ -63,7 +72,7 @@ class ImageGenerator(ABC):
     
     def generate_image(self,
                        description: str,
-                       reference_images_b64: Optional[List[str]] = None,
+                       reference_images: Optional[List[pathlib.Path]] = None,
                        model: str = "gpt-image-1-mini",
                        image_size: IMAGE_SIZE = "1024x1024",
                        quality: QUALITY = "medium",
@@ -73,7 +82,7 @@ class ImageGenerator(ABC):
 
         Args:
             description (str): The prompt for the character description.
-            reference_images_b64 (List[str]): Optional list of reference images as base64 PNG strings.
+            reference_images (List[pathlib.Path]): Optional list of reference image paths.
             model (str): The OpenAI model to use for generation.
             image_size (IMAGE_SIZE): Size of the generated image.
             quality (QUALITY): Quality level for generation.
@@ -82,7 +91,7 @@ class ImageGenerator(ABC):
         Returns:
             bytes: WebP image data as bytes.
         """
-        if not reference_images_b64:
+        if not reference_images:
             response = client.images.generate(
                 prompt=self.get_prompt(description),
                 background=background,
@@ -91,44 +100,18 @@ class ImageGenerator(ABC):
                 quality=quality
             )
         else:
-            # OpenAI expects file-like objects, so we need to create temp files from base64
-            temp_files = []
-            try:
-                for b64_str in reference_images_b64:
-                    # Decode base64 to bytes
-                    img_bytes = b64decode(b64_str)
-
-                    # Create temp file with PNG extension
-                    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
-                    temp_file.write(img_bytes)
-                    temp_file.close()
-                    temp_files.append(temp_file.name)
-
-                print(dict(
-                    prompt=self.get_prompt(description),
-                    image=[open(f, "rb") for f in temp_files],
-                    background=background,
-                    model=model,
-                    size=image_size,
-                    quality=quality
-                ))
-                raise Exception("Debugging - remove this line")  # Remove this line when implementing
-                # Call OpenAI with file paths
-                response = client.images.edit(
-                    prompt=self.get_prompt(description),
-                    image=[open(f, "rb") for f in temp_files],
-                    background=background,
-                    model=model,
-                    size=image_size,
-                    quality=quality
-                )
-            finally:
-                # Clean up temp files
-                for temp_path in temp_files:
-                    try:
-                        pathlib.Path(temp_path).unlink()
-                    except:
-                        pass
+            # Call OpenAI with file paths
+            response = client.images.edit(
+                prompt=self.get_prompt(description),
+                image=[
+                    convert_for_openai(img_path, "png")
+                    for img_path in reference_images
+                ],
+                background=background,
+                model=model,
+                size=image_size,
+                quality=quality
+            )
 
         if not response.data or not response.data[0].b64_json:
             raise ValueError("No image data returned from OpenAI API.")
@@ -142,60 +125,6 @@ class ImageGenerator(ABC):
             webp_data = webp_buffer.getvalue()
 
         return webp_data
-    
-    def restyle_image(self, image_path: pathlib.Path, savepath: pathlib.Path, model: str = "gpt-image-1-mini") -> pathlib.Path:
-        """
-        Restyle a single image using OpenAI's API.
-
-        Args:
-            image_path (pathlib.Path): The path to the original image.
-            savepath (pathlib.Path): The path where the restyled image will be saved.
-            model (str): The OpenAI model to use for restyling.
-
-        Returns:
-            pathlib.Path: The path to the restyled image.
-        """
-        prompt = self.get_prompt("the subject in the reference image")
-        response = client.images.edit(
-            prompt=prompt,
-            image=image_path.open("rb"),
-            # background='transparent',
-            model=model,
-            size="1024x1024"
-        )
-
-        if not response.data or not response.data[0].b64_json:
-            raise ValueError("No image data returned from OpenAI API.")
-
-        image_data = b64decode(response.data[0].b64_json)
-        savepath.parent.mkdir(parents=True, exist_ok=True)
-        savepath.write_bytes(image_data)
-        return savepath.resolve()
-    
-    def restyle_images(self, image_paths: Iterable[pathlib.Path], savepath: pathlib.Path, model: str = "gpt-image-1-mini", overwrite: bool = False) -> list[str]:
-        """
-        Restyle multiple images using OpenAI's API.
-
-        Args:
-            image_paths (Iterable[pathlib.Path]): An iterable of paths to the original images.
-            savepath (pathlib.Path): The path where the restyled images will be saved.
-            model (str): The OpenAI model to use for restyling.
-            overwrite (bool): If True, overwrite existing files at the savepath.
-
-        Returns:
-            list[str]: A list of paths to the restyled images.
-        """
-        savepath.mkdir(parents=True, exist_ok=True)
-        restyled_images = []
-        for image_path in image_paths:
-            restyled_image_path = (savepath / image_path.name).with_suffix('.png')
-            if restyled_image_path.exists() and not overwrite:
-                logging.info(f"Skipping {restyled_image_path} as it already exists.")
-                restyled_images.append(restyled_image_path.resolve())
-                continue
-            restyled_image = self.restyle_image(image_path, restyled_image_path, model)
-            restyled_images.append(restyled_image)
-        return restyled_images
 
 
 class CharacterImageGenerator(ImageGenerator):
@@ -212,39 +141,67 @@ class CharacterImageGenerator(ImageGenerator):
         )
         return prompt
     
-    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT) -> str:
+    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT, reference_images: Optional[List[pathlib.Path]] = None) -> str:
         """
         Extract a physical description from the provided text.
 
         Args:
             text (str): The text containing the character's description.
+            prompt (str): The context prompt for the description.
+            reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
 
         Returns:
             str: A concise physical description of the character.
         """
+        # Build messages with optional reference images
+        messages: List[Dict[str, Union[str, List[Dict[str, str]]]]] = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful assistant that creates short but detailed character descriptions "
+                    "based on the prompt provided and a general description of the character's appearance. "
+                    "Always give preference to the prompt over the general description (e.g., the "
+                    "prompt might ask them to wear a specific outfit or have a certain hairstyle while"
+                    "the general description describes them as typically wearing a different outfit). "
+                    "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
+                    "Focus on the physical description and do not include any names (even the character's name), personality traits, lore, etc. "
+                )
+            }
+        ]
+
+        # Build user message content
+        user_content = []
+
+        # Add reference images first if provided
+        if reference_images:
+            for img_path in reference_images:
+                with open(img_path, "rb") as img_file:
+                    img_bytes = img_file.read()
+                    base64_image = b64encode(img_bytes).decode('utf-8')
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                        },
+                    })
+
+        # Add text prompt
+        user_content.append({
+            "type": "text",
+            "text": (
+                prompt + "\n\n"
+                "Overall character description:\n" + text
+            )
+        })
+
+        messages.append({
+            "role": "user",
+            "content": user_content
+        })
+
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful assistant that creates short but detailed character descriptions "
-                        "based on the prompt provided and a general description of the character's appearance. "
-                        "Always give preference to the prompt over the general description (e.g., the "
-                        "prompt might ask them to wear a specific outfit or have a certain hairstyle while"
-                        "the general description describes them as typically wearing a different outfit). "
-                        "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
-                        "Focus on the physical description and do not include any names (even the character's name), personality traits, lore, etc. "
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        prompt + "\n\n"
-                        "Overall character description:\n" + text
-                    )
-                }
-            ]
+            messages=messages # type: ignore
         )
         if not response.choices or not response.choices[0].message:
             raise ValueError("No response from OpenAI API.")
@@ -268,39 +225,67 @@ class SceneImageGenerator(ImageGenerator):
         )
         return prompt
     
-    def get_description(self, text: str, prompt: str = "") -> str:
+    def get_description(self, text: str, prompt: str = "", reference_images: Optional[List[pathlib.Path]] = None) -> str:
         """
         Extract a description for the scene from the provided text.
 
         Args:
             text (str): The text containing the scene's description.
+            prompt (str): The context prompt for the description.
+            reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
 
         Returns:
             str: A concise description of the scene.
         """
+        # Build messages with optional reference images
+        messages: List[Dict[str, Union[str, List[Dict[str, str]]]]] = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful assistant that creates short but detailed scene descriptions "
+                    "based on the prompt provided and a general description of the scene. "
+                    "Always give preference to the prompt over the general description (e.g., the "
+                    "prompt might ask for a specific setting or time of day while the general description "
+                    "describes a different setting). This will be used as a prompt for generating an image, "
+                    "so be as consistent and descriptive as possible. "
+                    "Focus on the physical description and do not include any names, personality traits, lore, etc. "
+                )
+            }
+        ]
+
+        # Build user message content
+        user_content = []
+
+        # Add reference images first if provided
+        if reference_images:
+            for img_path in reference_images:
+                with open(img_path, "rb") as img_file:
+                    img_bytes = img_file.read()
+                    base64_image = b64encode(img_bytes).decode('utf-8')
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                        },
+                    })
+
+        # Add text prompt
+        user_content.append({
+            "type": "text",
+            "text": (
+                prompt + "\n\n"
+                "Overall scene description:\n" + text
+            )
+        })
+
+        messages.append({
+            "role": "user",
+            "content": user_content
+        })
+
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful assistant that creates short but detailed scene descriptions "
-                        "based on the prompt provided and a general description of the scene. "
-                        "Always give preference to the prompt over the general description (e.g., the "
-                        "prompt might ask for a specific setting or time of day while the general description "
-                        "describes a different setting). This will be used as a prompt for generating an image, "
-                        "so be as consistent and descriptive as possible. "
-                        "Focus on the physical description and do not include any names, personality traits, lore, etc. "
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        prompt + "\n\n"
-                        "Overall scene description:\n" + text
-                    )
-                }
-            ]
+            messages=messages  # type: ignore
         )
         if not response.choices or not response.choices[0].message:
             raise ValueError("No response from OpenAI API.")
@@ -323,39 +308,66 @@ class CreatureImageGenerator(ImageGenerator):
         )
         return prompt
     
-    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT) -> str:
+    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT, reference_images: Optional[List[pathlib.Path]] = None) -> str:
         """
         Extract a physical description from the provided text.
 
         Args:
             text (str): The text containing the creature's description.
             prompt (str): The context prompt for the description.
+            reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
         Returns:
             str: A concise physical description of the creature.
         """
+        # Build messages with optional reference images
+        messages: List[Dict[str, Union[str, List[Dict[str, str]]]]] = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful assistant that creates short but detailed creature descriptions "
+                    "based on the prompt provided and a general description of the creature's appearance. "
+                    "Always give preference to the prompt over the general description (e.g., the "
+                    "prompt might ask them to have a specific feature or color while the general description "
+                    "describes them as typically having different features). "
+                    "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
+                    "Focus on the physical description and do not include any names (even the creature's name), personality traits, lore, etc. "
+                )
+            }
+        ]
+
+        # Build user message content
+        user_content = []
+
+        # Add reference images first if provided
+        if reference_images:
+            for img_path in reference_images:
+                with open(img_path, "rb") as img_file:
+                    img_bytes = img_file.read()
+                    base64_image = b64encode(img_bytes).decode('utf-8')
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                        },
+                    })
+
+        # Add text prompt
+        user_content.append({
+            "type": "text",
+            "text": (
+                prompt + "\n\n"
+                "Overall creature description:\n" + text
+            )
+        })
+
+        messages.append({
+            "role": "user",
+            "content": user_content
+        })
+
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful assistant that creates short but detailed creature descriptions "
-                        "based on the prompt provided and a general description of the creature's appearance. "
-                        "Always give preference to the prompt over the general description (e.g., the "
-                        "prompt might ask them to have a specific feature or color while the general description "
-                        "describes them as typically having different features). "
-                        "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
-                        "Focus on the physical description and do not include any names (even the creature's name), personality traits, lore, etc. "
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        prompt + "\n\n"
-                        "Overall creature description:\n" + text
-                    )
-                }
-            ]
+            messages=messages  # type: ignore
         )
         if not response.choices or not response.choices[0].message:
             raise ValueError("No response from OpenAI API.")
@@ -377,39 +389,66 @@ class ItemImageGenerator(ImageGenerator):
         )
         return prompt
     
-    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT) -> str:
+    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT, reference_images: Optional[List[pathlib.Path]] = None) -> str:
         """
         Extract a physical description from the provided text.
 
         Args:
             text (str): The text containing the item's description.
             prompt (str): The context prompt for the description.
+            reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
         Returns:
             str: A concise physical description of the item.
         """
+        # Build messages with optional reference images
+        messages: List[Dict[str, Union[str, List[Dict[str, str]]]]] = [
+            {
+                "role": "system",
+                "content": (
+                    "You are a helpful assistant that creates short but detailed item descriptions "
+                    "based on the prompt provided and a general description of the item's appearance. "
+                    "Always give preference to the prompt over the general description (e.g., the "
+                    "prompt might ask for a specific material or design while the general description "
+                    "describes it as typically having different features). "
+                    "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
+                    "Only relate the physical description of the item and do not include any names (even of the item itself), lore, personality, etc. "
+                )
+            }
+        ]
+
+        # Build user message content
+        user_content = []
+
+        # Add reference images first if provided
+        if reference_images:
+            for img_path in reference_images:
+                with open(img_path, "rb") as img_file:
+                    img_bytes = img_file.read()
+                    base64_image = b64encode(img_bytes).decode('utf-8')
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                        },
+                    })
+
+        # Add text prompt
+        user_content.append({
+            "type": "text",
+            "text": (
+                prompt + "\n\n"
+                "General item description:\n" + text
+            )
+        })
+
+        messages.append({
+            "role": "user",
+            "content": user_content
+        })
+
         response = client.chat.completions.create(
             model="gpt-4o",
-            messages=[
-                {
-                    "role": "system",
-                    "content": (
-                        "You are a helpful assistant that creates short but detailed item descriptions "
-                        "based on the prompt provided and a general description of the item's appearance. "
-                        "Always give preference to the prompt over the general description (e.g., the "
-                        "prompt might ask for a specific material or design while the general description "
-                        "describes it as typically having different features). "
-                        "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
-                        "Only relate the physical description of the item and do not include any names (even of the item itself), lore, personality, etc. "
-                    )
-                },
-                {
-                    "role": "user",
-                    "content": (
-                        prompt + "\n\n"
-                        "General item description:\n" + text
-                    )
-                }
-            ]
+            messages=messages  # type: ignore
         )
         if not response.choices or not response.choices[0].message:
             raise ValueError("No response from OpenAI API.")

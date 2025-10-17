@@ -37,7 +37,7 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
         tuple: (success: bool, message: str)
     """
     user_email = user.email
-    user_id = str(user.id)
+    user_id = str(user.id) # type: ignore
 
     logger.info(f"Starting account deletion for user: {user_email}")
 
@@ -46,10 +46,10 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
         if user.stripe_customer_id:
             try:
                 # Cancel active subscription if exists
-                if user.subscription and user.subscription.stripe_subscription_id:
-                    logger.info(f"Canceling subscription: {user.subscription.stripe_subscription_id}")
+                if user.subscription and user.subscription.stripe_subscription_id: # type: ignore
+                    logger.info(f"Canceling subscription: {user.subscription.stripe_subscription_id}") # type: ignore
                     try:
-                        client.v1.subscriptions.cancel(user.subscription.stripe_subscription_id)
+                        client.v1.subscriptions.cancel(user.subscription.stripe_subscription_id) # type: ignore
                         logger.info(f"Successfully canceled subscription")
                     except Exception as e:
                         logger.warning(f"Failed to cancel subscription: {e}")
@@ -59,7 +59,7 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
                 if delete_stripe_customer:
                     logger.info(f"Deleting Stripe customer: {user.stripe_customer_id}")
                     try:
-                        client.v1.customers.delete(user.stripe_customer_id)
+                        client.v1.customers.delete(user.stripe_customer_id) # type: ignore
                         logger.info(f"Successfully deleted Stripe customer")
                     except Exception as e:
                         logger.warning(f"Failed to delete Stripe customer: {e}")
@@ -71,7 +71,7 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
 
         # Step 2: Count images (stored in MongoDB, will be deleted with generations)
         try:
-            images_count = Generation.objects(user=user, image_data__ne=None).count()
+            images_count = Generation.objects(user=user, image_data__ne=None).count() # type: ignore
             logger.info(f"User has {images_count} images stored in MongoDB")
         except Exception as e:
             logger.error(f"Error counting images: {e}")
@@ -79,8 +79,8 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
 
         # Step 3: Delete API keys
         try:
-            api_keys_count = APIKey.objects(user=user).count()
-            APIKey.objects(user=user).delete()
+            api_keys_count = APIKey.objects(user=user).count() # type: ignore
+            APIKey.objects(user=user).delete() # type: ignore
             logger.info(f"Deleted {api_keys_count} API keys")
         except Exception as e:
             logger.error(f"Error deleting API keys: {e}")
@@ -88,8 +88,8 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
 
         # Step 4: Delete generation records
         try:
-            generations_count = Generation.objects(user=user).count()
-            Generation.objects(user=user).delete()
+            generations_count = Generation.objects(user=user).count() # type: ignore
+            Generation.objects(user=user).delete() # type: ignore
             logger.info(f"Deleted {generations_count} generation records")
         except Exception as e:
             logger.error(f"Error deleting generations: {e}")
@@ -97,8 +97,8 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
 
         # Step 5: Delete transaction records
         try:
-            transactions_count = BrushstrokeTransaction.objects(user=user).count()
-            BrushstrokeTransaction.objects(user=user).delete()
+            transactions_count = BrushstrokeTransaction.objects(user=user).count() # type: ignore
+            BrushstrokeTransaction.objects(user=user).delete() # type: ignore
             logger.info(f"Deleted {transactions_count} transaction records")
         except Exception as e:
             logger.error(f"Error deleting transactions: {e}")
@@ -107,8 +107,8 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
         # Step 6: Delete log entries
         logs_count = 0
         try:
-            logs_count = Log.objects(user=user).count()
-            Log.objects(user=user).delete()
+            logs_count = Log.objects(user=user).count() # type: ignore
+            Log.objects(user=user).delete() # type: ignore
             logger.info(f"Deleted {logs_count} log entries")
         except Exception as e:
             logger.warning(f"Error deleting logs: {e}")
@@ -150,11 +150,11 @@ def get_account_deletion_summary(user: User) -> dict:
     """
     try:
         summary = {
-            "api_keys": APIKey.objects(user=user).count(),
-            "generations": Generation.objects(user=user).count(),
-            "transactions": BrushstrokeTransaction.objects(user=user).count(),
-            "logs": Log.objects(user=user).count(),
-            "has_subscription": bool(user.subscription and user.subscription.stripe_subscription_id),
+            "api_keys": APIKey.objects(user=user).count(), # type: ignore
+            "generations": Generation.objects(user=user).count(), # type: ignore
+            "transactions": BrushstrokeTransaction.objects(user=user).count(), # type: ignore
+            "logs": Log.objects(user=user).count(), # type: ignore
+            "has_subscription": bool(user.subscription and user.subscription.stripe_subscription_id), # type: ignore
             "has_stripe_customer": bool(user.stripe_customer_id),
             "purchased_brushstrokes": user.purchased_brushstrokes,
         }

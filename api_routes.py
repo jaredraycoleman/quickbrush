@@ -150,24 +150,29 @@ async def get_user_info(user: User = Depends(get_current_user)):
 
     if subscription_info_tuple and subscription_info_tuple[0]:
         sub_dict, monthly_allowance = subscription_info_tuple
-        allowance_used = user.subscription.allowance_used_this_period if user.subscription else 0
+        if not sub_dict:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="Failed to retrieve subscription information"
+            )
+        allowance_used = user.subscription.allowance_used_this_period if user.subscription else 0 # type: ignore
         return UserInfoResponse(
-            email=user.email,
+            email=user.email, # type: ignore
             subscription_tier=sub_dict["tier"],
             subscription_status=sub_dict["status"],
             total_brushstrokes=user.total_brushstrokes(monthly_allowance),
-            subscription_allowance_remaining=max(0, monthly_allowance - allowance_used),
-            purchased_brushstrokes=user.purchased_brushstrokes,
+            subscription_allowance_remaining=max(0, monthly_allowance - allowance_used), # type: ignore
+            purchased_brushstrokes=user.purchased_brushstrokes, # type: ignore
             current_period_end=sub_dict["current_period_end"],
         )
     else:
         return UserInfoResponse(
-            email=user.email,
+            email=user.email, # type: ignore
             subscription_tier="free",
             subscription_status="none",
             total_brushstrokes=user.total_brushstrokes(0),
             subscription_allowance_remaining=0,
-            purchased_brushstrokes=user.purchased_brushstrokes,
+            purchased_brushstrokes=user.purchased_brushstrokes, # type: ignore
             current_period_end=None,
         )
 
@@ -221,12 +226,12 @@ async def generate_image(
 
     if not result.success:
         # Determine appropriate status code
-        if "insufficient brushstrokes" in result.error_message.lower():
+        if "insufficient brushstrokes" in (result.error_message or "").lower():
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=result.error_message
             )
-        elif "invalid generation_type" in result.error_message.lower():
+        elif "invalid generation_type" in (result.error_message or "").lower():
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail=result.error_message
@@ -236,6 +241,18 @@ async def generate_image(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 detail=result.error_message
             )
+        
+    if not result.generation_id:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Generation failed: missing generation ID"
+        )
+    
+    if not result.refined_description:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Generation failed: missing refined description"
+        )
 
     # Success - return response
     return GenerateImageResponse(
