@@ -140,4 +140,104 @@
         </div>
     </div>
 </div>
+
+<!-- API Key Created Modal -->
+<div class="modal fade" id="apiKeyModal" tabindex="-1" aria-labelledby="apiKeyModalLabel" aria-hidden="true" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="apiKeyModalLabel">
+                    <i class="bi bi-check-circle-fill me-2"></i>API Key Created Successfully
+                </h5>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-warning mb-3">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+                    <strong>Important:</strong> This is the only time you'll see this key. Save it securely now!
+                </div>
+
+                <div class="mb-3">
+                    <label for="apiKeyName" class="form-label fw-bold">Key Name:</label>
+                    <input type="text" class="form-control" id="apiKeyName" readonly>
+                </div>
+
+                <div class="mb-3">
+                    <label for="apiKeyValue" class="form-label fw-bold">API Key:</label>
+                    <div class="input-group">
+                        <input type="text" class="form-control font-monospace" id="apiKeyValue" readonly>
+                        <button class="btn btn-outline-primary" type="button" id="copyButton">
+                            <i class="bi bi-clipboard"></i> Copy
+                        </button>
+                    </div>
+                    <small class="text-muted">Use this key in the Authorization header: Bearer YOUR_KEY</small>
+                </div>
+
+                <div class="form-check mb-3">
+                    <input class="form-check-input" type="checkbox" id="savedConfirmation">
+                    <label class="form-check-label" for="savedConfirmation">
+                        I have saved this API key in a secure location
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-primary" id="closeModalButton" disabled>
+                    I've Saved My Key
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Check if there's a new API key to display
+    const newApiKey = {{ new_api_key|tojson if new_api_key else 'null' }};
+    const newApiKeyName = {{ new_api_key_name|tojson if new_api_key_name else 'null' }};
+
+    if (newApiKey && newApiKeyName) {
+        // Populate modal with data
+        document.getElementById('apiKeyName').value = newApiKeyName;
+        document.getElementById('apiKeyValue').value = newApiKey;
+
+        // Show the modal
+        const modal = new bootstrap.Modal(document.getElementById('apiKeyModal'));
+        modal.show();
+
+        // Copy button functionality
+        document.getElementById('copyButton').addEventListener('click', function() {
+            const apiKeyInput = document.getElementById('apiKeyValue');
+            apiKeyInput.select();
+            apiKeyInput.setSelectionRange(0, 99999); // For mobile devices
+
+            navigator.clipboard.writeText(apiKeyInput.value).then(function() {
+                const copyButton = document.getElementById('copyButton');
+                const originalHTML = copyButton.innerHTML;
+                copyButton.innerHTML = '<i class="bi bi-check-lg"></i> Copied!';
+                copyButton.classList.remove('btn-outline-primary');
+                copyButton.classList.add('btn-success');
+
+                setTimeout(function() {
+                    copyButton.innerHTML = originalHTML;
+                    copyButton.classList.remove('btn-success');
+                    copyButton.classList.add('btn-outline-primary');
+                }, 2000);
+            }).catch(function(err) {
+                console.error('Failed to copy:', err);
+                alert('Failed to copy to clipboard. Please copy manually.');
+            });
+        });
+
+        // Enable close button only when checkbox is checked
+        document.getElementById('savedConfirmation').addEventListener('change', function() {
+            document.getElementById('closeModalButton').disabled = !this.checked;
+        });
+
+        // Close modal functionality
+        document.getElementById('closeModalButton').addEventListener('click', function() {
+            modal.hide();
+        });
+    }
+});
+</script>
+
 {% endblock %}

@@ -272,7 +272,17 @@ def api_keys_page():
 
     keys = get_user_api_keys(user, include_inactive=True)
 
-    return render_template("api_keys.html", api_keys=keys, user=user)
+    # Get newly created API key from session (if exists)
+    new_api_key = session.pop("new_api_key", None)
+    new_api_key_name = session.pop("new_api_key_name", None)
+
+    return render_template(
+        "api_keys.html",
+        api_keys=keys,
+        user=user,
+        new_api_key=new_api_key,
+        new_api_key_name=new_api_key_name
+    )
 
 
 @app.route("/api-keys/create", methods=["POST"])
@@ -296,8 +306,9 @@ def create_api_key_route():
         api_key, secret = create_api_key(user, name, expires_in_days)
         full_key = f"{api_key.key_id}:{secret}"
 
-        flash(f"API key created successfully! Key: {full_key}", "success")
-        flash("Save this key now - it won't be shown again!", "warning")
+        # Store the key temporarily in session to display in modal
+        session["new_api_key"] = full_key
+        session["new_api_key_name"] = name
 
         return redirect(url_for("api_keys_page"))
 

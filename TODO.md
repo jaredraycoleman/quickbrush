@@ -1,0 +1,6 @@
+- [ ] Improve descriptions of products in Stripe
+- [ ] Change to not save images locally, but just send directly in responses to users. Add warnings for users that images won't be saved for later retrieval.
+- [ ] Allow users to delete account and all associated data.
+- [ ] Implement simple rate limiting on API endpoints to prevent abuse.
+- [ ] Add contact form for support inquiries.
+- [ ] If current subscription differs from next renewal subscription (e.g. user changed plan), show that on dashboard.
