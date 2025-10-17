@@ -40,6 +40,7 @@ from stripe_utils import (
     get_subscription_info,
 )
 from api_key_service import get_user_api_keys, create_api_key, revoke_api_key
+from account_service import delete_user_account, get_account_deletion_summary
 from datetime import datetime, timezone
 
 
@@ -340,6 +341,57 @@ def revoke_api_key_route(key_id: str):
         flash("Failed to revoke API key", "danger")
 
     return redirect(url_for("api_keys_page"))
+
+
+# ---------------------------------------------------------
+# ACCOUNT MANAGEMENT ROUTES
+# ---------------------------------------------------------
+
+@app.route("/settings")
+@login_required
+def settings_page():
+    """Account settings page."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Get deletion summary
+    deletion_summary = get_account_deletion_summary(user)
+
+    return render_template(
+        "settings.html",
+        user=user,
+        deletion_summary=deletion_summary
+    )
+
+
+@app.route("/account/delete", methods=["POST"])
+@login_required
+def delete_account():
+    """Delete user account and all associated data."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Verify confirmation
+    confirmation = request.form.get("confirmation")
+    if confirmation != "DELETE":
+        flash("Please type 'DELETE' to confirm account deletion", "danger")
+        return redirect(url_for("settings_page"))
+
+    # Perform deletion
+    success, message = delete_user_account(user)
+
+    if success:
+        # Clear session and redirect to home
+        session.clear()
+        flash("Your account has been permanently deleted.", "success")
+        return redirect(url_for("home"))
+    else:
+        flash(f"Failed to delete account: {message}", "danger")
+        return redirect(url_for("settings_page"))
 
 
 # ---------------------------------------------------------

@@ -1,0 +1,191 @@
+{% extends "base.html" %}
+
+{% block title %}Account Settings - Quickbrush{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-lg-8 mx-auto">
+            <h1 class="mb-4">Account Settings</h1>
+
+            <!-- Account Information -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Account Information</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row mb-3">
+                        <div class="col-sm-4 fw-bold">Email:</div>
+                        <div class="col-sm-8">{{ user.email }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4 fw-bold">Name:</div>
+                        <div class="col-sm-8">{{ user.name or 'Not set' }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4 fw-bold">Member Since:</div>
+                        <div class="col-sm-8">{{ user.created_at.strftime('%B %d, %Y') }}</div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-sm-4 fw-bold">Last Login:</div>
+                        <div class="col-sm-8">
+                            {% if user.last_login %}
+                            {{ user.last_login.strftime('%B %d, %Y at %I:%M %p') }}
+                            {% else %}
+                            Unknown
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Links -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5 class="mb-0">Quick Links</h5>
+                </div>
+                <div class="card-body">
+                    <div class="d-grid gap-2">
+                        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-primary">
+                            <i class="bi bi-house-door"></i> Back to Dashboard
+                        </a>
+                        <a href="{{ url_for('api_keys_page') }}" class="btn btn-outline-primary">
+                            <i class="bi bi-key"></i> Manage API Keys
+                        </a>
+                        <a href="{{ url_for('portal') }}" class="btn btn-outline-primary">
+                            <i class="bi bi-credit-card"></i> Billing & Subscriptions
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Danger Zone -->
+            <div class="card border-danger mb-4">
+                <div class="card-header bg-danger text-white">
+                    <h5 class="mb-0">
+                        <i class="bi bi-exclamation-triangle-fill"></i> Danger Zone
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <h6 class="fw-bold">Delete Account</h6>
+                    <p class="text-muted">
+                        Once you delete your account, there is no going back. This action is permanent and irreversible.
+                    </p>
+
+                    <div class="alert alert-warning">
+                        <strong>The following data will be permanently deleted:</strong>
+                        <ul class="mb-0 mt-2">
+                            <li><strong>{{ deletion_summary.api_keys }}</strong> API key(s)</li>
+                            <li><strong>{{ deletion_summary.generations }}</strong> image generation(s)</li>
+                            <li><strong>{{ deletion_summary.transactions }}</strong> transaction record(s)</li>
+                            {% if deletion_summary.has_subscription %}
+                            <li>Active subscription (will be canceled)</li>
+                            {% endif %}
+                            {% if deletion_summary.purchased_brushstrokes > 0 %}
+                            <li><strong>{{ deletion_summary.purchased_brushstrokes }}</strong> purchased brushstrokes</li>
+                            {% endif %}
+                            <li>All generated images</li>
+                            <li>Your account profile</li>
+                        </ul>
+                    </div>
+
+                    <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteAccountModal">
+                        <i class="bi bi-trash"></i> Delete My Account
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Delete Account Confirmation Modal -->
+<div class="modal fade" id="deleteAccountModal" tabindex="-1" aria-labelledby="deleteAccountModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="deleteAccountModalLabel">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>Confirm Account Deletion
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <div class="alert alert-danger">
+                    <strong>WARNING:</strong> This action cannot be undone!
+                </div>
+
+                <p class="mb-3">You are about to permanently delete your account and all associated data:</p>
+
+                <ul class="mb-3">
+                    <li>{{ deletion_summary.api_keys }} API key(s)</li>
+                    <li>{{ deletion_summary.generations }} image generation(s)</li>
+                    <li>{{ deletion_summary.transactions }} transaction record(s)</li>
+                    <li>All generated images</li>
+                    {% if deletion_summary.has_subscription %}
+                    <li>Your active subscription will be canceled</li>
+                    {% endif %}
+                    {% if deletion_summary.purchased_brushstrokes > 0 %}
+                    <li>{{ deletion_summary.purchased_brushstrokes }} purchased brushstrokes will be forfeited</li>
+                    {% endif %}
+                </ul>
+
+                <p class="fw-bold">This action is permanent and cannot be reversed.</p>
+
+                <form method="POST" action="{{ url_for('delete_account') }}" id="deleteAccountForm">
+                    <div class="mb-3">
+                        <label for="confirmationInput" class="form-label">
+                            Type <code>DELETE</code> to confirm:
+                        </label>
+                        <input
+                            type="text"
+                            class="form-control"
+                            id="confirmationInput"
+                            name="confirmation"
+                            required
+                            autocomplete="off"
+                        >
+                    </div>
+
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" id="understandCheckbox" required>
+                        <label class="form-check-label" for="understandCheckbox">
+                            I understand this action is permanent and irreversible
+                        </label>
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button type="submit" form="deleteAccountForm" class="btn btn-danger" id="confirmDeleteButton" disabled>
+                    Delete My Account Permanently
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const confirmationInput = document.getElementById('confirmationInput');
+    const understandCheckbox = document.getElementById('understandCheckbox');
+    const confirmDeleteButton = document.getElementById('confirmDeleteButton');
+
+    function updateButtonState() {
+        const isConfirmationValid = confirmationInput.value === 'DELETE';
+        const isCheckboxChecked = understandCheckbox.checked;
+        confirmDeleteButton.disabled = !(isConfirmationValid && isCheckboxChecked);
+    }
+
+    confirmationInput.addEventListener('input', updateButtonState);
+    understandCheckbox.addEventListener('change', updateButtonState);
+
+    // Reset form when modal is closed
+    const modal = document.getElementById('deleteAccountModal');
+    modal.addEventListener('hidden.bs.modal', function() {
+        confirmationInput.value = '';
+        understandCheckbox.checked = false;
+        updateButtonState();
+    });
+});
+</script>
+
+{% endblock %}

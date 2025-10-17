@@ -155,9 +155,12 @@
   </div>
 
   <!-- Action Buttons -->
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2 flex-wrap">
     <a href="{{ url_for('generate') }}" class="btn btn-wispy">Generate an Image</a>
     <a href="{{ url_for('portal') }}" class="btn btn-outline-dark">Billing Portal</a>
+    <a href="{{ url_for('settings_page') }}" class="btn btn-outline-secondary">
+      <i class="bi bi-gear"></i> Settings
+    </a>
   </div>
 </div>
 
