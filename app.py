@@ -16,6 +16,11 @@ from dotenv import find_dotenv, load_dotenv
 
 from config import Config
 from auth import oauth, login_required
+from database import init_db
+from models import (
+    get_or_create_user, User, Generation,
+    ImageGenerationType, ImageQuality, QUALITY_COSTS
+)
 from maker import (
     token_cost,
     SceneImageGenerator,
@@ -27,15 +32,20 @@ from maker import (
 )
 from stripe_utils import (
     create_portal_session,
-    get_or_create_customer,
-    record_usage,
-    get_credits_balance,
-    get_credit_grants,
-    get_auto_recharge_settings,
-    set_auto_recharge_settings,
-    create_checkout_session,
-    handle_checkout_webhook,
+    get_or_create_stripe_customer,
+    record_generation,
+    create_subscription_checkout,
+    create_pack_checkout,
+    handle_checkout_completed,
+    handle_subscription_created,
+    handle_subscription_updated,
+    handle_subscription_deleted,
+    handle_invoice_paid,
+    verify_webhook_signature,
+    cancel_subscription,
 )
+from api_key_service import get_user_api_keys, create_api_key, revoke_api_key
+from datetime import datetime, timezone
 
 
 # ---------------------------------------------------------
@@ -48,8 +58,35 @@ if ENV_FILE:
 app = Flask(__name__)
 app.secret_key = Config.APP_SECRET_KEY
 
+# Initialize MongoDB
+init_db()
+
 # Initialize Auth0 (via auth.py)
 oauth.init_app(app)
+
+# ---------------------------------------------------------
+# Helper Functions
+# ---------------------------------------------------------
+
+def get_current_user() -> User:
+    """Get current user from session and MongoDB."""
+    if "user" not in session:
+        return None
+
+    auth0_user = session["user"]
+    userinfo = auth0_user.get("userinfo", {})
+
+    auth0_sub = userinfo.get("sub")
+    email = userinfo.get("email")
+    name = userinfo.get("name")
+    picture = userinfo.get("picture")
+
+    if not auth0_sub or not email:
+        return None
+
+    # Get or create user in MongoDB
+    user = get_or_create_user(auth0_sub, email, name, picture)
+    return user
 
 # ---------------------------------------------------------
 # Routes
@@ -91,61 +128,165 @@ def logout():
 @app.route("/dashboard")
 @login_required
 def dashboard():
-    user = session["user"]
-    cust = get_or_create_customer(user)
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("login"))
 
-    # Get credits balance and auto-recharge settings
-    credits_balance = get_credits_balance(cust.id)
-    auto_recharge_settings = get_auto_recharge_settings(cust.id)
-    credit_grants = get_credit_grants(cust.id)
+    # Get subscription info
+    subscription = user.subscription if user.subscription else None
+    subscription_info = None
+    if subscription:
+        subscription_info = {
+            "tier": subscription.tier,
+            "status": subscription.status,
+            "monthly_allowance": subscription.monthly_allowance,
+            "allowance_used": subscription.allowance_used_this_period,
+            "allowance_remaining": subscription.remaining_allowance(),
+            "current_period_end": subscription.current_period_end,
+            "cancel_at_period_end": subscription.cancel_at_period_end,
+        }
+
+    # Get API keys
+    api_keys = get_user_api_keys(user, include_inactive=False)
+
+    # Get Stripe price IDs (with fallbacks for missing config)
+    try:
+        stripe_prices = {
+            "basic": Config.STRIPE_PRICE_BASIC,
+            "pro": Config.STRIPE_PRICE_PRO,
+            "premium": Config.STRIPE_PRICE_PREMIUM,
+            "ultimate": Config.STRIPE_PRICE_ULTIMATE,
+            "pack_250": Config.STRIPE_PRICE_PACK_250,
+            "pack_500": Config.STRIPE_PRICE_PACK_500,
+            "pack_1000": Config.STRIPE_PRICE_PACK_1000,
+            "pack_5000": Config.STRIPE_PRICE_PACK_5000,
+        }
+    except Exception as e:
+        # If Stripe prices aren't configured yet, use placeholders
+        print(f"Warning: Stripe prices not configured: {e}")
+        stripe_prices = {
+            "basic": "CONFIGURE_IN_ENV",
+            "pro": "CONFIGURE_IN_ENV",
+            "premium": "CONFIGURE_IN_ENV",
+            "ultimate": "CONFIGURE_IN_ENV",
+            "pack_250": "CONFIGURE_IN_ENV",
+            "pack_500": "CONFIGURE_IN_ENV",
+            "pack_1000": "CONFIGURE_IN_ENV",
+            "pack_5000": "CONFIGURE_IN_ENV",
+        }
 
     return render_template(
         "dashboard.html",
         user=user,
-        customer=cust,
-        credits_balance=credits_balance,
-        auto_recharge_settings=auto_recharge_settings,
-        credit_grants=credit_grants,
+        subscription=subscription_info,
+        total_brushstrokes=user.total_brushstrokes(),
+        purchased_brushstrokes=user.purchased_brushstrokes,
+        api_keys=api_keys,
+        stripe_prices=stripe_prices
     )
 
 
 @app.route("/portal")
 @login_required
 def portal():
-    user = session["user"]
-    url = create_portal_session(user)
-    return redirect(url)
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    try:
+        url = create_portal_session(user)
+        return redirect(url)
+    except Exception as e:
+        flash(f"Error creating portal session: {str(e)}", "danger")
+        return redirect(url_for("dashboard"))
 
 
 # ---------------------------------------------------------
-# CREDITS & AUTO-RECHARGE ROUTES
+# SUBSCRIPTION ROUTES
 # ---------------------------------------------------------
 
-@app.route("/buy-credits")
+@app.route("/subscribe")
 @login_required
-def buy_credits():
-    """Initiate a checkout session to purchase credits."""
-    user = session["user"]
-    cust = get_or_create_customer(user)
+def subscribe():
+    """Initiate subscription checkout."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
 
-    # Get the amount from query params (default to $5)
-    amount_cents = int(request.args.get("amount", 500))
+    price_id = request.args.get("price_id")
+    if not price_id:
+        flash("Missing price_id parameter", "danger")
+        return redirect(url_for("dashboard"))
 
-    # Validate amount
-    if amount_cents not in Config.CREDIT_PACKAGES:
-        flash(f"Invalid credit package amount: ${amount_cents/100:.2f}", "danger")
+    # Validate price_id
+    tiers = Config.get_subscription_tiers()
+    if price_id not in tiers:
+        flash("Invalid subscription tier", "danger")
         return redirect(url_for("dashboard"))
 
     # Create checkout session
     success_url = url_for("checkout_success", _external=True) + "?session_id={CHECKOUT_SESSION_ID}"
     cancel_url = url_for("dashboard", _external=True)
 
-    checkout_url = create_checkout_session(
-        customer_id=cust.id,
-        amount_cents=amount_cents,
-        success_url=success_url,
-        cancel_url=cancel_url,
-    )
+    checkout_url = create_subscription_checkout(user, price_id, success_url, cancel_url)
+
+    if checkout_url:
+        return redirect(checkout_url)
+    else:
+        flash("Failed to create checkout session. Please try again.", "danger")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/cancel-subscription", methods=["POST"])
+@login_required
+def cancel_subscription_route():
+    """Cancel user's subscription."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    success = cancel_subscription(user)
+    if success:
+        flash("Subscription canceled. You'll retain access until the end of your billing period.", "success")
+    else:
+        flash("Failed to cancel subscription. Please try again or contact support.", "danger")
+
+    return redirect(url_for("dashboard"))
+
+
+# ---------------------------------------------------------
+# PURCHASE ROUTES
+# ---------------------------------------------------------
+
+@app.route("/buy-pack")
+@login_required
+def buy_pack():
+    """Initiate brushstroke pack purchase."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    price_id = request.args.get("price_id")
+    if not price_id:
+        flash("Missing price_id parameter", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Validate price_id
+    packs = Config.get_brushstroke_packs()
+    if price_id not in packs:
+        flash("Invalid brushstroke pack", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Create checkout session
+    success_url = url_for("checkout_success", _external=True) + "?session_id={CHECKOUT_SESSION_ID}"
+    cancel_url = url_for("dashboard", _external=True)
+
+    checkout_url = create_pack_checkout(user, price_id, success_url, cancel_url)
 
     if checkout_url:
         return redirect(checkout_url)
@@ -157,56 +298,143 @@ def buy_credits():
 @app.route("/checkout-success")
 @login_required
 def checkout_success():
-    """Handle successful checkout and add credits to the user's account."""
+    """Handle successful checkout."""
     session_id = request.args.get("session_id")
     if not session_id:
         flash("Invalid checkout session.", "danger")
         return redirect(url_for("dashboard"))
 
-    # Handle the webhook to add credits
-    success = handle_checkout_webhook(session_id)
+    # Handle the checkout completion
+    success = handle_checkout_completed(session_id)
     if success:
-        flash("Credits added successfully! Thank you for your purchase.", "success")
+        flash("Payment successful! Your account has been updated.", "success")
     else:
-        flash("There was an issue adding your credits. Please contact support.", "warning")
+        flash("There was an issue processing your payment. Please contact support if this persists.", "warning")
 
     return redirect(url_for("dashboard"))
 
 
-@app.route("/settings/auto-recharge", methods=["GET", "POST"])
-@login_required
-def auto_recharge_settings():
-    """View and update auto-recharge settings."""
-    user = session["user"]
-    cust = get_or_create_customer(user)
+# ---------------------------------------------------------
+# STRIPE WEBHOOKS
+# ---------------------------------------------------------
 
-    if request.method == "POST":
-        # Update settings
-        enabled = request.form.get("enabled") == "on"
-        amount_str = request.form.get("amount", str(Config.DEFAULT_AUTO_RECHARGE_AMOUNT))
+@app.route("/webhooks/stripe", methods=["POST"])
+def stripe_webhook():
+    """Handle Stripe webhooks."""
+    payload = request.data
+    sig_header = request.headers.get("Stripe-Signature")
 
-        try:
-            amount = int(amount_str)
-            success = set_auto_recharge_settings(cust.id, enabled, amount)
-            if success:
-                flash("Auto-recharge settings updated successfully!", "success")
-            else:
-                flash("Failed to update auto-recharge settings.", "danger")
-        except ValueError:
-            flash("Invalid recharge amount.", "danger")
+    # Verify signature
+    if not verify_webhook_signature(payload, sig_header):
+        return {"error": "Invalid signature"}, 400
 
-        return redirect(url_for("dashboard"))
+    try:
+        import json
+        event = json.loads(payload)
+    except Exception as e:
+        return {"error": "Invalid payload"}, 400
 
-    # GET request - show current settings
-    settings = get_auto_recharge_settings(cust.id)
-    return render_template(
-        "auto_recharge_settings.html",
-        settings=settings,
-        credit_packages=Config.CREDIT_PACKAGES,
-    )
+    event_type = event.get("type")
+    data_object = event.get("data", {}).get("object", {})
+
+    # Handle different event types
+    if event_type == "checkout.session.completed":
+        handle_checkout_completed(data_object.get("id"))
+
+    elif event_type == "customer.subscription.created":
+        handle_subscription_created(data_object.get("id"))
+
+    elif event_type == "customer.subscription.updated":
+        handle_subscription_updated(data_object.get("id"))
+
+    elif event_type == "customer.subscription.deleted":
+        handle_subscription_deleted(data_object.get("id"))
+
+    elif event_type == "invoice.paid":
+        handle_invoice_paid(data_object.get("id"))
+
+    else:
+        print(f"Unhandled webhook event: {event_type}")
+
+    return {"status": "success"}, 200
+
 
 # ---------------------------------------------------------
-# NEW: Image Generation Page
+# API KEY MANAGEMENT ROUTES
+# ---------------------------------------------------------
+
+@app.route("/api-keys")
+@login_required
+def api_keys_page():
+    """API key management page."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    keys = get_user_api_keys(user, include_inactive=True)
+
+    return render_template("api_keys.html", api_keys=keys, user=user)
+
+
+@app.route("/api-keys/create", methods=["POST"])
+@login_required
+def create_api_key_route():
+    """Create a new API key."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    name = request.form.get("name")
+    if not name:
+        flash("API key name is required", "danger")
+        return redirect(url_for("api_keys_page"))
+
+    expires_in_days = request.form.get("expires_in_days")
+    expires_in_days = int(expires_in_days) if expires_in_days else None
+
+    try:
+        api_key, secret = create_api_key(user, name, expires_in_days)
+        full_key = f"{api_key.key_id}:{secret}"
+
+        flash(f"API key created successfully! Key: {full_key}", "success")
+        flash("Save this key now - it won't be shown again!", "warning")
+
+        return redirect(url_for("api_keys_page"))
+
+    except Exception as e:
+        flash(f"Error creating API key: {str(e)}", "danger")
+        return redirect(url_for("api_keys_page"))
+
+
+@app.route("/api-keys/revoke/<key_id>", methods=["POST"])
+@login_required
+def revoke_api_key_route(key_id: str):
+    """Revoke an API key."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    from models import APIKey
+    api_key = APIKey.objects(key_id=key_id, user=user).first()
+
+    if not api_key:
+        flash("API key not found", "danger")
+        return redirect(url_for("api_keys_page"))
+
+    success = revoke_api_key(api_key)
+    if success:
+        flash("API key revoked successfully", "success")
+    else:
+        flash("Failed to revoke API key", "danger")
+
+    return redirect(url_for("api_keys_page"))
+
+
+# ---------------------------------------------------------
+# IMAGE GENERATION ROUTES
 # ---------------------------------------------------------
 
 GENERATED_DIR = pathlib.Path("static/generated")
@@ -222,6 +450,11 @@ class GenerateRequest(BaseModel):
 @login_required
 def generate():
     if request.method == "POST":
+        user = get_current_user()
+        if not user:
+            flash("Error loading user data", "danger")
+            return redirect(url_for("dashboard"))
+
         # Capture form data for state preservation
         form_data = {
             "text": request.form.get("text", ""),
@@ -250,21 +483,13 @@ def generate():
             flash("Please provide a description for your image.", "warning")
             return render_template("generate.html", **form_data, error=True)
 
-        # Get customer and check credits
-        user = session["user"]
-        try:
-            cust = get_or_create_customer(user)
-        except Exception as e:
-            flash(f"Failed to retrieve customer information: {str(e)}", "danger")
-            return render_template("generate.html", **form_data, error=True)
-
         brushstrokes_needed = token_cost(data.quality)
-        current_balance = get_credits_balance(cust.id)
+        current_balance = user.total_brushstrokes()
 
         if current_balance < brushstrokes_needed:
             flash(
-                f"Insufficient credits! You need {brushstrokes_needed} brushstrokes but only have {current_balance}. "
-                f'<a href="{url_for("dashboard")}" class="alert-link">Purchase more credits</a>.',
+                f"Insufficient brushstrokes! You need {brushstrokes_needed} but only have {current_balance}. "
+                f'<a href="{url_for("dashboard")}" class="alert-link">Purchase more brushstrokes</a>.',
                 "warning"
             )
             return render_template("generate.html", **form_data, error=True)
@@ -304,6 +529,8 @@ def generate():
         # Generate the image
         description = None
         image_path = None
+        generation = None
+
         try:
             # Step 1: Generate description from text
             try:
@@ -335,12 +562,30 @@ def generate():
                     flash(f"Failed to generate image: {error_msg}", "danger")
                 return render_template("generate.html", **form_data, error=True)
 
-            # Step 3: Record usage (deduct credits)
+            # Step 3: Create generation record
+            generation = Generation(
+                user=user,
+                generation_type=gen_type,
+                quality=data.quality,
+                user_text=data.text,
+                user_prompt=data.prompt,
+                refined_description=description,
+                image_size=data.size,
+                image_url=f"/static/generated/{image_path.name}",
+                image_filename=image_path.name,
+                brushstrokes_used=brushstrokes_needed,
+                status="completed",
+                source="web",
+                completed_at=datetime.now(timezone.utc),
+            )
+            generation.save()
+
+            # Step 4: Record usage (deduct brushstrokes)
             try:
-                success = record_usage(cust.id, brushstrokes_needed)
+                success = record_generation(user, brushstrokes_needed, str(generation.id))
                 if not success:
                     # This shouldn't happen as we already checked balance, but handle it anyway
-                    flash("Warning: Image generated but credits may not have been deducted. Please check your balance.", "warning")
+                    flash("Warning: Image generated but brushstrokes may not have been deducted. Please check your balance.", "warning")
             except Exception as e:
                 flash(f"Warning: Image generated but failed to record usage: {str(e)}", "warning")
 
@@ -359,6 +604,23 @@ def generate():
         except Exception as e:
             # Catch-all for unexpected errors
             flash(f"Unexpected error: {str(e)}", "danger")
+
+            # Create failed generation record if not already created
+            if not generation:
+                generation = Generation(
+                    user=user,
+                    generation_type=gen_type,
+                    quality=data.quality,
+                    user_text=data.text,
+                    user_prompt=data.prompt,
+                    image_size=data.size,
+                    brushstrokes_used=0,
+                    status="failed",
+                    error_message=str(e),
+                    source="web",
+                )
+                generation.save()
+
             return render_template("generate.html", **form_data, error=True)
 
         finally:
@@ -372,6 +634,23 @@ def generate():
 
     # GET request - show empty form
     return render_template("generate.html", gen_type="character")
+
+
+# ---------------------------------------------------------
+# Mount FastAPI app for API routes
+# ---------------------------------------------------------
+try:
+    from api_routes import api as fastapi_app
+    from werkzeug.middleware.dispatcher import DispatcherMiddleware
+    from fastapi.middleware.wsgi import WSGIMiddleware
+
+    # Mount FastAPI app at /api
+    app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
+        "/api": WSGIMiddleware(fastapi_app)
+    })
+except Exception as e:
+    print(f"Warning: Could not mount FastAPI app: {e}")
+
 
 # ---------------------------------------------------------
 # Run

@@ -9,78 +9,258 @@
     </div>
   </div>
 
+  <!-- Brushstrokes Balance -->
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <h5 class="fw-bold">Credits Balance</h5>
-      <p class="mb-1">Available: <strong>{{ credits_balance }}</strong> brushstrokes</p>
-      {% if credits_balance < 5 %}
-      <div class="alert alert-warning py-2 px-3 mb-2">
-        <small>Low on brushstrokes! Consider purchasing more credits.</small>
-      </div>
-      {% endif %}
+      <h5 class="fw-bold">Brushstrokes Balance</h5>
+      <p class="mb-1">Total Available: <strong>{{ total_brushstrokes }}</strong> brushstrokes</p>
 
-      {% if credit_grants %}
-      <div class="mt-2">
-        <small class="text-muted fw-bold">Credit Packages (Expires 30 days from purchase):</small>
-        <ul class="list-unstyled mb-2">
-          {% for grant in credit_grants[:3] %}
-          <li class="small text-muted">
-            • {{ grant.amount }} brushstrokes expire on {{ grant.expires_date }}
-          </li>
-          {% endfor %}
-        </ul>
-      </div>
-      {% endif %}
-
-      <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#pricingModal">
-        View pricing & packages
-      </button>
-    </div>
-  </div>
-
-  <div class="card border-0 shadow-sm mb-3">
-    <div class="card-body">
-      <h5 class="fw-bold">Auto-Recharge Settings</h5>
-      <p class="mb-1">
-        Status:
-        {% if auto_recharge_settings.enabled %}
-        <span class="badge bg-success">Enabled</span>
-        {% else %}
-        <span class="badge bg-secondary">Disabled</span>
+      <div class="row mt-3">
+        {% if subscription %}
+        <div class="col-md-6">
+          <small class="text-muted">Subscription Allowance:</small>
+          <div class="progress" style="height: 25px;">
+            <div class="progress-bar bg-success" role="progressbar"
+                 style="width: {{ (subscription.allowance_remaining / subscription.monthly_allowance * 100) if subscription.monthly_allowance > 0 else 0 }}%"
+                 aria-valuenow="{{ subscription.allowance_remaining }}"
+                 aria-valuemin="0"
+                 aria-valuemax="{{ subscription.monthly_allowance }}">
+              {{ subscription.allowance_remaining }} / {{ subscription.monthly_allowance }}
+            </div>
+          </div>
+        </div>
         {% endif %}
-      </p>
-      {% if auto_recharge_settings.enabled %}
-      <p class="mb-2 text-muted small">
-        When your balance reaches 0, we'll automatically charge ${{ "%.2f"|format(auto_recharge_settings.amount / 100) }} to add more brushstrokes.
-      </p>
+
+        <div class="col-md-6">
+          <small class="text-muted">Purchased Packs:</small>
+          <p class="mb-0"><strong>{{ purchased_brushstrokes }}</strong> brushstrokes</p>
+          <small class="text-muted">(Never expire)</small>
+        </div>
+      </div>
+
+      {% if total_brushstrokes < 10 %}
+      <div class="alert alert-warning py-2 px-3 mt-3 mb-0">
+        <small>⚠️ Low on brushstrokes! Subscribe or purchase a pack below.</small>
+      </div>
       {% endif %}
-      <a href="{{ url_for('auto_recharge_settings') }}" class="btn btn-sm btn-outline-secondary">
-        Manage Auto-Recharge
-      </a>
     </div>
   </div>
 
+  <!-- Subscription Section -->
   <div class="card border-0 shadow-sm mb-3">
     <div class="card-body">
-      <h5 class="fw-bold">Purchase Credits</h5>
-      <p class="text-muted mb-3">Buy brushstrokes to fuel your creativity! ($0.02 per brushstroke)</p>
-      <div class="d-flex gap-2 flex-wrap">
-        <a href="{{ url_for('buy_credits', amount=500) }}" class="btn btn-outline-primary">
-          $5.00<br><small>(250 brushstrokes)</small>
-        </a>
-        <a href="{{ url_for('buy_credits', amount=1000) }}" class="btn btn-outline-primary">
-          $10.00<br><small>(500 brushstrokes)</small>
-        </a>
-        <a href="{{ url_for('buy_credits', amount=2000) }}" class="btn btn-outline-primary">
-          $20.00<br><small>(1,000 brushstrokes)</small>
-        </a>
+      <h5 class="fw-bold">Subscription</h5>
+
+      {% if subscription and subscription.status == 'active' %}
+        <div class="d-flex justify-content-between align-items-center mb-2">
+          <div>
+            <span class="badge bg-success">{{ subscription.tier|title }} Plan</span>
+            <p class="mb-0 mt-2 text-muted small">
+              {{ subscription.monthly_allowance }} brushstrokes per month
+            </p>
+            {% if subscription.current_period_end %}
+            <p class="mb-0 text-muted small">
+              {% if subscription.cancel_at_period_end %}
+                Cancels on {{ subscription.current_period_end.strftime('%B %d, %Y') }}
+              {% else %}
+                Renews {{ subscription.current_period_end.strftime('%B %d, %Y') }}
+              {% endif %}
+            </p>
+            {% endif %}
+          </div>
+
+          <div>
+            {% if not subscription.cancel_at_period_end %}
+            <form method="POST" action="{{ url_for('cancel_subscription_route') }}" style="display: inline;">
+              <button type="submit" class="btn btn-sm btn-outline-danger"
+                      onclick="return confirm('Are you sure you want to cancel your subscription?{% if subscription.current_period_end %} You\'ll keep access until {{ subscription.current_period_end.strftime('%B %d, %Y') }}.{% endif %}');">
+                Cancel
+              </button>
+            </form>
+            {% endif %}
+            <a href="{{ url_for('portal') }}" class="btn btn-sm btn-outline-secondary">Manage</a>
+          </div>
+        </div>
+
+        <button class="btn btn-sm btn-outline-primary mt-2" data-bs-toggle="modal" data-bs-target="#subscriptionModal">
+          Upgrade Plan
+        </button>
+
+      {% else %}
+        <p class="text-muted mb-3">Subscribe for the best value — get monthly brushstroke allowances at half the cost!</p>
+
+        <div class="row g-2">
+          <div class="col-6 col-md-3">
+            <a href="{{ url_for('subscribe', price_id=stripe_prices.basic) }}" class="btn btn-outline-primary w-100">
+              <strong>Basic</strong><br>
+              <small>$5/mo</small><br>
+              <small class="text-muted">250 brushstrokes</small>
+            </a>
+          </div>
+          <div class="col-6 col-md-3">
+            <a href="{{ url_for('subscribe', price_id=stripe_prices.pro) }}" class="btn btn-outline-primary w-100">
+              <strong>Pro</strong><br>
+              <small>$10/mo</small><br>
+              <small class="text-muted">500 brushstrokes</small>
+            </a>
+          </div>
+          <div class="col-6 col-md-3">
+            <a href="{{ url_for('subscribe', price_id=stripe_prices.premium) }}" class="btn btn-outline-primary w-100">
+              <strong>Premium</strong><br>
+              <small>$20/mo</small><br>
+              <small class="text-muted">1000 brushstrokes</small>
+            </a>
+          </div>
+          <div class="col-6 col-md-3">
+            <a href="{{ url_for('subscribe', price_id=stripe_prices.ultimate) }}" class="btn btn-outline-primary w-100">
+              <strong>Ultimate</strong><br>
+              <small>$50/mo</small><br>
+              <small class="text-muted">5000 brushstrokes</small>
+            </a>
+          </div>
+        </div>
+
+        <button class="btn btn-sm btn-link mt-2" data-bs-toggle="modal" data-bs-target="#pricingModal">
+          Learn more about subscriptions
+        </button>
+      {% endif %}
+    </div>
+  </div>
+
+  <!-- Purchase Packs Section -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <h5 class="fw-bold">Purchase Brushstroke Packs</h5>
+      <p class="text-muted mb-3">One-time purchases that never expire ($0.04 per brushstroke)</p>
+
+      <div class="row g-2">
+        <div class="col-6 col-md-3">
+          <a href="{{ url_for('buy_pack', price_id=stripe_prices.pack_250) }}" class="btn btn-outline-secondary w-100">
+            <strong>Small</strong><br>
+            <small>$10</small><br>
+            <small class="text-muted">250 brushstrokes</small>
+          </a>
+        </div>
+        <div class="col-6 col-md-3">
+          <a href="{{ url_for('buy_pack', price_id=stripe_prices.pack_500) }}" class="btn btn-outline-secondary w-100">
+            <strong>Medium</strong><br>
+            <small>$20</small><br>
+            <small class="text-muted">500 brushstrokes</small>
+          </a>
+        </div>
+        <div class="col-6 col-md-3">
+          <a href="{{ url_for('buy_pack', price_id=stripe_prices.pack_1000) }}" class="btn btn-outline-secondary w-100">
+            <strong>Large</strong><br>
+            <small>$40</small><br>
+            <small class="text-muted">1000 brushstrokes</small>
+          </a>
+        </div>
+        <div class="col-6 col-md-3">
+          <a href="{{ url_for('buy_pack', price_id=stripe_prices.pack_5000) }}" class="btn btn-outline-secondary w-100">
+            <strong>Mega</strong><br>
+            <small>$200</small><br>
+            <small class="text-muted">5000 brushstrokes</small>
+          </a>
+        </div>
       </div>
     </div>
   </div>
 
+  <!-- API Keys Section -->
+  <div class="card border-0 shadow-sm mb-3">
+    <div class="card-body">
+      <h5 class="fw-bold">API Access</h5>
+      <p class="text-muted mb-2">Generate images programmatically with our REST API</p>
+
+      {% if api_keys %}
+      <p class="mb-2"><small>You have {{ api_keys|length }} active API key(s)</small></p>
+      {% endif %}
+
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('api_keys_page') }}" class="btn btn-sm btn-outline-secondary">Manage API Keys</a>
+        <a href="/api/docs" target="_blank" class="btn btn-sm btn-outline-secondary">API Documentation</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- Action Buttons -->
   <div class="d-flex gap-2">
-    <a href="{{ url_for('portal') }}" class="btn btn-wispy">Manage Account</a>
-    <a href="{{ url_for('generate') }}" class="btn btn-outline-dark">Generate an Image</a>
+    <a href="{{ url_for('generate') }}" class="btn btn-wispy">Generate an Image</a>
+    <a href="{{ url_for('portal') }}" class="btn btn-outline-dark">Billing Portal</a>
+  </div>
+</div>
+
+<!-- Subscription Details Modal -->
+<div class="modal fade" id="subscriptionModal" tabindex="-1" aria-labelledby="subscriptionModalLabel" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-light">
+        <h5 class="modal-title" id="subscriptionModalLabel">Subscription Plans</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <h6 class="fw-bold">Choose Your Plan</h6>
+        <p class="text-muted">All subscriptions include monthly brushstroke allowances that reset each billing cycle.</p>
+
+        <div class="list-group mb-3">
+          <a href="{{ url_for('subscribe', price_id=stripe_prices.basic) }}" class="list-group-item list-group-item-action">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-0">Basic Plan</h6>
+                <small class="text-muted">Perfect for casual creators</small>
+              </div>
+              <div class="text-end">
+                <strong>$5/month</strong><br>
+                <small class="text-muted">250 brushstrokes</small>
+              </div>
+            </div>
+          </a>
+
+          <a href="{{ url_for('subscribe', price_id=stripe_prices.pro) }}" class="list-group-item list-group-item-action">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-0">Pro Plan</h6>
+                <small class="text-muted">For regular artists</small>
+              </div>
+              <div class="text-end">
+                <strong>$10/month</strong><br>
+                <small class="text-muted">500 brushstrokes</small>
+              </div>
+            </div>
+          </a>
+
+          <a href="{{ url_for('subscribe', price_id=stripe_prices.premium) }}" class="list-group-item list-group-item-action">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-0">Premium Plan</h6>
+                <small class="text-muted">For serious creators</small>
+              </div>
+              <div class="text-end">
+                <strong>$20/month</strong><br>
+                <small class="text-muted">1000 brushstrokes</small>
+              </div>
+            </div>
+          </a>
+
+          <a href="{{ url_for('subscribe', price_id=stripe_prices.ultimate) }}" class="list-group-item list-group-item-action">
+            <div class="d-flex justify-content-between align-items-center">
+              <div>
+                <h6 class="mb-0">Ultimate Plan</h6>
+                <small class="text-muted">For power users</small>
+              </div>
+              <div class="text-end">
+                <strong>$50/month</strong><br>
+                <small class="text-muted">5000 brushstrokes</small>
+              </div>
+            </div>
+          </a>
+        </div>
+
+        <div class="alert alert-info">
+          <strong>💡 Best Value!</strong> Subscriptions cost $0.02 per brushstroke — that's 50% cheaper than one-time packs!
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -89,68 +269,53 @@
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header bg-light">
-        <h5 class="modal-title" id="pricingModalLabel">Quickbrush Pricing & Brushstroke Guide</h5>
+        <h5 class="modal-title" id="pricingModalLabel">Quickbrush Pricing Guide</h5>
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        <p>
-          Brushstrokes are the magical pigments that power your creations.
-          Purchase credits in advance and use them whenever inspiration strikes!
-        </p>
-
-        <hr>
-
         <h6 class="fw-bold">✨ How Brushstrokes Work</h6>
-        <p>
-          Every image you generate costs a few brushstrokes depending on its quality:
-        </p>
+        <p>Every image you generate costs a few brushstrokes depending on its quality:</p>
         <ul>
           <li><strong>1 brushstroke</strong> — Low Quality (quick sketch)</li>
           <li><strong>3 brushstrokes</strong> — Medium Quality (refined detail)</li>
           <li><strong>5 brushstrokes</strong> — High Quality (fully rendered masterpiece)</li>
         </ul>
 
-        <p class="mb-3">
-          For example:
-        </p>
+        <hr>
+
+        <h6 class="fw-bold">📅 Subscription Plans (Best Value!)</h6>
+        <p>Get monthly brushstroke allowances at <strong>$0.02 per brushstroke</strong>:</p>
         <ul>
-          <li>With <strong>250 brushstrokes</strong>, you could create 250 quick sketches, 83 medium pieces, or 50 high-quality images.</li>
-          <li>With <strong>1,000 brushstrokes</strong>, you could paint 1,000 sketches or about 333 detailed artworks!</li>
+          <li><strong>Basic ($5/mo)</strong> — 250 brushstrokes/month</li>
+          <li><strong>Pro ($10/mo)</strong> — 500 brushstrokes/month</li>
+          <li><strong>Premium ($20/mo)</strong> — 1000 brushstrokes/month</li>
+          <li><strong>Ultimate ($50/mo)</strong> — 5000 brushstrokes/month</li>
         </ul>
+        <p class="text-muted small">Allowances reset each billing cycle. Use subscription brushstrokes first, then purchased packs.</p>
 
         <hr>
 
-        <h6 class="fw-bold">💰 Credit Packages</h6>
-        <p>Purchase brushstrokes in convenient packages at <strong>$0.02 per brushstroke</strong>:</p>
+        <h6 class="fw-bold">💰 One-Time Packs</h6>
+        <p>Purchase brushstrokes that never expire at <strong>$0.04 per brushstroke</strong>:</p>
         <ul>
-          <li><strong>$5.00</strong> — 250 brushstrokes</li>
-          <li><strong>$10.00</strong> — 500 brushstrokes</li>
-          <li><strong>$20.00</strong> — 1,000 brushstrokes</li>
+          <li><strong>$10</strong> — 250 brushstrokes</li>
+          <li><strong>$20</strong> — 500 brushstrokes</li>
+          <li><strong>$40</strong> — 1000 brushstrokes</li>
+          <li><strong>$200</strong> — 5000 brushstrokes</li>
         </ul>
+        <p class="text-muted small">Perfect for occasional use or supplementing your subscription.</p>
 
         <hr>
 
-        <h6 class="fw-bold">🔄 Auto-Recharge</h6>
-        <p>
-          Enable auto-recharge to automatically purchase more brushstrokes when your balance runs out.
-          You can choose your preferred recharge amount ($5, $10, or $20) and disable it anytime.
-        </p>
-
-        <hr>
-
-        <h6 class="fw-bold">⏰ Credit Expiration</h6>
-        <p>
-          All purchased credits expire <strong>30 days from the date of purchase</strong>.
-          This encourages you to use your brushstrokes while they're fresh!
-        </p>
+        <h6 class="fw-bold">🎯 Which Option is Right for You?</h6>
         <ul>
-          <li>Credits are automatically deducted from the oldest (soonest to expire) batch first</li>
-          <li>You can view your credit expiration dates on the dashboard</li>
-          <li>Expired credits are automatically removed and cannot be used</li>
+          <li><strong>Subscribe</strong> if you generate images regularly (best value at 50% savings!)</li>
+          <li><strong>Buy packs</strong> if you only create occasionally or want a reserve</li>
+          <li><strong>Do both!</strong> Subscribe for monthly use, buy packs for extra when needed</li>
         </ul>
 
-        <p class="text-muted">
-          <em>Think of it like a magical paint well — refill it whenever you need, and let your imagination run wild!</em>
+        <p class="text-muted mt-3">
+          <em>Your subscription allowance is used first each month, then any purchased packs kick in automatically.</em>
         </p>
       </div>
     </div>
