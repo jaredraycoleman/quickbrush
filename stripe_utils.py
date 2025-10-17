@@ -10,26 +10,14 @@ This module handles:
 
 from stripe import StripeClient
 from config import Config
-from models import (
-    User, BrushstrokeTransaction, SubscriptionTier,
-    SubscriptionStatus, TransactionType, get_user_by_stripe_customer_id
-)
+from models import User, BrushstrokeTransaction, TransactionType
 from datetime import datetime, timezone
 from typing import Optional, Tuple
 import logging
 
 logger = logging.getLogger(__name__)
-# set logging level to DEBUG for detailed output
-logger.setLevel(logging.DEBUG)
-# set logger to print to console
-ch = logging.StreamHandler()
-ch.setLevel(logging.DEBUG)
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch.setFormatter(formatter)
-logger.addHandler(ch)
 
 client = StripeClient(api_key=Config.STRIPE_SECRET_KEY)
-
 
 # ========================================
 # SUBSCRIPTION INFO FETCHING

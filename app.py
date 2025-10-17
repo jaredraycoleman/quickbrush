@@ -1,5 +1,4 @@
 from typing import Optional
-import uuid
 import pathlib
 from urllib.parse import quote_plus, urlencode
 from pydantic import BaseModel, ValidationError
@@ -18,22 +17,10 @@ from dotenv import find_dotenv, load_dotenv
 from config import Config
 from auth import oauth, login_required
 from database import init_db
-from models import (
-    get_or_create_user, User, Generation,
-    ImageGenerationType, ImageQuality, QUALITY_COSTS
-)
-from maker import (
-    token_cost,
-    SceneImageGenerator,
-    CreatureImageGenerator,
-    ItemImageGenerator,
-    CharacterImageGenerator,
-    QUALITY,
-    IMAGE_SIZE
-)
+from models import get_or_create_user, User
+from maker import QUALITY, IMAGE_SIZE
 from stripe_utils import (
     create_portal_session,
-    record_generation,
     create_pack_checkout,
     handle_checkout_completed,
     check_and_renew_subscription,
@@ -43,7 +30,6 @@ from api_key_service import get_user_api_keys, create_api_key, revoke_api_key
 from account_service import delete_user_account, get_account_deletion_summary
 from image_service import get_user_generations, get_generation_by_id, get_remaining_image_slots
 from generation_service import generate_image as generate_image_shared
-from datetime import datetime, timezone
 from flask import send_file
 from io import BytesIO
 import tempfile
@@ -262,8 +248,6 @@ def checkout_success():
         flash("There was an issue processing your payment. Please contact support if this persists.", "warning")
 
     return redirect(url_for("dashboard"))
-
-
 
 
 # ---------------------------------------------------------

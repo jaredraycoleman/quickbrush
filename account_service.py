@@ -8,7 +8,6 @@ from models import User, APIKey, Generation, BrushstrokeTransaction, Log
 from stripe import StripeClient
 from config import Config
 import logging
-import pathlib
 
 logger = logging.getLogger(__name__)
 
@@ -37,10 +36,7 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
         tuple: (success: bool, message: str)
     """
     user_email = user.email
-    user_id = str(user.id) # type: ignore
-
     logger.info(f"Starting account deletion for user: {user_email}")
-
     try:
         # Step 1: Handle Stripe subscription and customer
         if user.stripe_customer_id:

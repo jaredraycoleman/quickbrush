@@ -9,14 +9,13 @@ This module defines the data schemas for:
 """
 
 from datetime import datetime, timezone
-from typing import Optional, List
+from typing import Optional
 from enum import Enum
 from mongoengine import (
     Document,
     EmbeddedDocument,
     StringField,
     IntField,
-    FloatField,
     BooleanField,
     DateTimeField,
     ListField,
@@ -32,35 +31,6 @@ import secrets
 # ========================================
 # ENUMS
 # ========================================
-
-class SubscriptionTier(str, Enum):
-    """Subscription tiers with monthly brushstroke allowances."""
-    FREE = "free"  # No subscription
-    BASIC = "basic"  # $5/month - 250 brushstrokes/month
-    PRO = "pro"  # $10/month - 500 brushstrokes/month
-    PREMIUM = "premium"  # $20/month - 1000 brushstrokes/month
-    ULTIMATE = "ultimate"  # $50/month - 2500 brushstrokes/month
-
-
-TIER_ALLOWANCES = {
-    SubscriptionTier.FREE: 0,
-    SubscriptionTier.BASIC: 250,
-    SubscriptionTier.PRO: 500,
-    SubscriptionTier.PREMIUM: 1000,
-    SubscriptionTier.ULTIMATE: 2500,
-}
-
-
-class SubscriptionStatus(str, Enum):
-    """Stripe subscription statuses."""
-    ACTIVE = "active"
-    PAST_DUE = "past_due"
-    CANCELED = "canceled"
-    INCOMPLETE = "incomplete"
-    INCOMPLETE_EXPIRED = "incomplete_expired"
-    TRIALING = "trialing"
-    UNPAID = "unpaid"
-
 
 class TransactionType(str, Enum):
     """Types of brushstroke transactions."""
@@ -488,15 +458,6 @@ def get_user_by_auth0_sub(auth0_sub: str) -> Optional[User]:
         return User.objects(auth0_sub=auth0_sub).first() # type: ignore
     except Exception as e:
         print(f"Error fetching user by auth0_sub: {e}")
-        return None
-
-
-def get_user_by_stripe_customer_id(customer_id: str) -> Optional[User]:
-    """Get user by Stripe customer ID."""
-    try:
-        return User.objects(stripe_customer_id=customer_id).first() # type: ignore
-    except Exception as e:
-        print(f"Error fetching user by stripe_customer_id: {e}")
         return None
 
 

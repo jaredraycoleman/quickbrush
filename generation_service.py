@@ -10,9 +10,7 @@ from maker import (
     ImageGenerator,
     SceneImageGenerator,
     CreatureImageGenerator,
-    ItemImageGenerator,
-    QUALITY,
-    IMAGE_SIZE
+    ItemImageGenerator
 )
 from image_service import save_generation_with_image, get_remaining_image_slots
 from stripe_utils import get_subscription_info, record_generation

@@ -1,6 +1,5 @@
-import logging
 import pathlib
-from typing import Dict, Iterable, List, Literal, Optional, Union
+from typing import Dict, List, Literal, Optional, Union
 from base64 import b64decode, b64encode
 from rembg import remove
 from abc import ABC, abstractmethod
