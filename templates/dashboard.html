@@ -88,7 +88,7 @@
         </a>
 
         <p class="text-muted mt-2">
-          Choose from: Basic ($5/mo, 250), Pro ($10/mo, 500), Premium ($20/mo, 1000), or Ultimate ($50/mo, 5000 brushstrokes)
+          Choose from: Basic ($5/mo, 250), Pro ($10/mo, 500), Premium ($20/mo, 1000), or Ultimate ($50/mo, 2500 brushstrokes)
         </p>
 
         <button class="btn btn-sm btn-link mt-2" data-bs-toggle="modal" data-bs-target="#pricingModal">
@@ -127,10 +127,10 @@
           </a>
         </div>
         <div class="col-6 col-md-3">
-          <a href="{{ url_for('buy_pack', price_id=stripe_prices.pack_5000) }}" class="btn btn-outline-secondary w-100">
+          <a href="{{ url_for('buy_pack', price_id=stripe_prices.pack_2500) }}" class="btn btn-outline-secondary w-100">
             <strong>Mega</strong><br>
-            <small>$200</small><br>
-            <small>5000 brushstrokes</small>
+            <small>$100</small><br>
+            <small>2500 brushstrokes</small>
           </a>
         </div>
       </div>
@@ -157,6 +157,9 @@
   <!-- Action Buttons -->
   <div class="d-flex gap-2 flex-wrap">
     <a href="{{ url_for('generate') }}" class="btn btn-wispy">Generate an Image</a>
+    <a href="{{ url_for('library') }}" class="btn btn-outline-primary">
+      <i class="bi bi-images"></i> Image Library
+    </a>
     <a href="{{ url_for('portal') }}" class="btn btn-outline-dark">Billing Portal</a>
     <a href="{{ url_for('settings_page') }}" class="btn btn-outline-secondary">
       <i class="bi bi-gear"></i> Settings
@@ -190,7 +193,7 @@
           <li><strong>Basic ($5/mo)</strong> — 250 brushstrokes/month</li>
           <li><strong>Pro ($10/mo)</strong> — 500 brushstrokes/month</li>
           <li><strong>Premium ($20/mo)</strong> — 1000 brushstrokes/month</li>
-          <li><strong>Ultimate ($50/mo)</strong> — 5000 brushstrokes/month</li>
+          <li><strong>Ultimate ($50/mo)</strong> — 2500 brushstrokes/month</li>
         </ul>
         <p class="text-muted small">Allowances reset each billing cycle. Use subscription brushstrokes first, then purchased packs.</p>
 
@@ -202,7 +205,7 @@
           <li><strong>$10</strong> — 250 brushstrokes</li>
           <li><strong>$20</strong> — 500 brushstrokes</li>
           <li><strong>$40</strong> — 1000 brushstrokes</li>
-          <li><strong>$200</strong> — 5000 brushstrokes</li>
+          <li><strong>$100</strong> — 2500 brushstrokes</li>
         </ul>
         <p class="text-muted small">Perfect for occasional use or supplementing your subscription.</p>
 

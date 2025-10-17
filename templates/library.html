@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+
+{% block title %}Image Library - Quickbrush{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h1>
+                    <i class="bi bi-images"></i> Your Image Library
+                </h1>
+                <div class="d-flex gap-2">
+                    <a href="{{ url_for('generate') }}" class="btn btn-wispy">
+                        <i class="bi bi-plus-circle"></i> Generate New Image
+                    </a>
+                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+                        <i class="bi bi-house-door"></i> Dashboard
+                    </a>
+                </div>
+            </div>
+
+            <!-- Storage Info Alert -->
+            <div class="alert alert-info mb-4">
+                <div class="row align-items-center">
+                    <div class="col-md-8">
+                        <i class="bi bi-info-circle"></i>
+                        <strong>Image Storage:</strong> Your last {{ max_images }} generations are stored in WebP format.
+                        Older images are automatically removed when you exceed the limit.
+                    </div>
+                    <div class="col-md-4 text-md-end">
+                        <span class="badge bg-primary fs-6">
+                            {{ generations|length }} / {{ max_images }} slots used
+                        </span>
+                        <br>
+                        <small class="text-muted">{{ remaining_slots }} slots remaining</small>
+                    </div>
+                </div>
+            </div>
+
+            {% if generations %}
+            <!-- Image Grid -->
+            <div class="row g-4">
+                {% for gen in generations %}
+                <div class="col-md-6 col-lg-4">
+                    <div class="card h-100 shadow-sm">
+                        <div class="card-img-top position-relative" style="height: 300px; overflow: hidden; background-color: #f8f9fa;">
+                            <img src="{{ url_for('serve_image', generation_id=gen.id|string) }}"
+                                 alt="{{ gen.generation_type|title }} - {{ gen.created_at.strftime('%Y-%m-%d') }}"
+                                 class="w-100 h-100"
+                                 style="object-fit: cover; cursor: pointer;"
+                                 data-bs-toggle="modal"
+                                 data-bs-target="#imageModal{{ loop.index }}">
+                        </div>
+                        <div class="card-body">
+                            <h6 class="card-title">
+                                {% if gen.generation_type == 'character' %}🎭
+                                {% elif gen.generation_type == 'scene' %}🌄
+                                {% elif gen.generation_type == 'creature' %}🐉
+                                {% elif gen.generation_type == 'item' %}🗡️
+                                {% endif %}
+                                {{ gen.generation_type|title }}
+                            </h6>
+                            <p class="card-text small text-muted mb-2">
+                                {{ gen.user_text[:80] }}{% if gen.user_text|length > 80 %}...{% endif %}
+                            </p>
+                            <div class="d-flex justify-content-between align-items-center">
+                                <small class="text-muted">
+                                    <i class="bi bi-calendar3"></i>
+                                    {{ gen.created_at.strftime('%b %d, %Y') }}
+                                </small>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-outline-primary"
+                                            data-bs-toggle="modal"
+                                            data-bs-target="#imageModal{{ loop.index }}">
+                                        <i class="bi bi-eye"></i>
+                                    </button>
+                                    <a href="{{ url_for('serve_image', generation_id=gen.id|string) }}"
+                                       download="generated_{{ gen.id }}.webp"
+                                       class="btn btn-sm btn-outline-success">
+                                        <i class="bi bi-download"></i>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="card-footer bg-light">
+                            <div class="d-flex justify-content-between align-items-center">
+                                <span class="badge bg-secondary">{{ gen.quality|title }}</span>
+                                <small class="text-muted">{{ gen.brushstrokes_used }} brushstrokes</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Image Detail Modal -->
+                <div class="modal fade" id="imageModal{{ loop.index }}" tabindex="-1" aria-labelledby="imageModalLabel{{ loop.index }}" aria-hidden="true">
+                    <div class="modal-dialog modal-xl modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title" id="imageModalLabel{{ loop.index }}">
+                                    {{ gen.generation_type|title }} - {{ gen.created_at.strftime('%B %d, %Y') }}
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="row">
+                                    <div class="col-lg-8">
+                                        <img src="{{ url_for('serve_image', generation_id=gen.id|string) }}"
+                                             alt="Generated Image"
+                                             class="img-fluid rounded shadow-sm mb-3"
+                                             style="max-width: 100%; height: auto;">
+                                    </div>
+                                    <div class="col-lg-4">
+                                        <h6>Details</h6>
+                                        <hr>
+                                        <p><strong>Type:</strong> {{ gen.generation_type|title }}</p>
+                                        <p><strong>Quality:</strong> {{ gen.quality|title }}</p>
+                                        <p><strong>Size:</strong> {{ gen.image_size }}</p>
+                                        <p><strong>Cost:</strong> {{ gen.brushstrokes_used }} brushstrokes</p>
+                                        <p><strong>Created:</strong> {{ gen.created_at.strftime('%B %d, %Y at %I:%M %p') }}</p>
+                                        <p><strong>Source:</strong> {{ gen.source|title }}</p>
+
+                                        <hr>
+                                        <h6>Description</h6>
+                                        <p class="small">{{ gen.user_text }}</p>
+
+                                        {% if gen.user_prompt %}
+                                        <h6>Prompt</h6>
+                                        <p class="small">{{ gen.user_prompt }}</p>
+                                        {% endif %}
+
+                                        {% if gen.refined_description %}
+                                        <h6>AI Refined Description</h6>
+                                        <p class="small text-muted fst-italic">{{ gen.refined_description }}</p>
+                                        {% endif %}
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="modal-footer">
+                                <a href="{{ url_for('serve_image', generation_id=gen.id|string) }}"
+                                   download="generated_{{ gen.id }}.webp"
+                                   class="btn btn-success">
+                                    <i class="bi bi-download"></i> Download WebP
+                                </a>
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% else %}
+            <!-- Empty State -->
+            <div class="text-center py-5">
+                <i class="bi bi-images" style="font-size: 4rem; color: #ccc;"></i>
+                <h3 class="mt-3">No Images Yet</h3>
+                <p class="text-muted">Start creating amazing images with Quickbrush!</p>
+                <a href="{{ url_for('generate') }}" class="btn btn-wispy mt-3">
+                    <i class="bi bi-plus-circle"></i> Generate Your First Image
+                </a>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+{% endblock %}

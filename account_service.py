@@ -69,28 +69,13 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
                 logger.error(f"Error handling Stripe cleanup: {e}")
                 # Continue with deletion even if Stripe operations fail
 
-        # Step 2: Delete generated images from disk
-        deleted_images_count = 0
+        # Step 2: Count images (stored in MongoDB, will be deleted with generations)
         try:
-            generations = Generation.objects(user=user)
-            generated_dir = pathlib.Path("static/generated")
-
-            for gen in generations:
-                if gen.image_filename:
-                    image_path = generated_dir / gen.image_filename
-                    try:
-                        if image_path.exists():
-                            image_path.unlink()
-                            deleted_images_count += 1
-                            logger.debug(f"Deleted image file: {gen.image_filename}")
-                    except Exception as e:
-                        logger.warning(f"Failed to delete image {gen.image_filename}: {e}")
-                        # Continue even if file deletion fails
-
-            logger.info(f"Deleted {deleted_images_count} image files from disk")
+            images_count = Generation.objects(user=user, image_data__ne=None).count()
+            logger.info(f"User has {images_count} images stored in MongoDB")
         except Exception as e:
-            logger.error(f"Error deleting image files: {e}")
-            # Continue with deletion
+            logger.error(f"Error counting images: {e}")
+            images_count = 0
 
         # Step 3: Delete API keys
         try:
@@ -120,6 +105,7 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
             return False, f"Failed to delete transaction records: {str(e)}"
 
         # Step 6: Delete log entries
+        logs_count = 0
         try:
             logs_count = Log.objects(user=user).count()
             Log.objects(user=user).delete()
@@ -139,9 +125,8 @@ def delete_user_account(user: User, delete_stripe_customer: bool = True) -> tupl
         # Success!
         summary = (
             f"Account deleted successfully. "
-            f"Removed {api_keys_count} API keys, {generations_count} generations, "
-            f"{transactions_count} transactions, {deleted_images_count} images, "
-            f"and {logs_count} log entries."
+            f"Removed {api_keys_count} API keys, {generations_count} generations ({images_count} with images), "
+            f"{transactions_count} transactions, and {logs_count} log entries."
         )
         logger.info(summary)
         return True, summary

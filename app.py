@@ -41,7 +41,10 @@ from stripe_utils import (
 )
 from api_key_service import get_user_api_keys, create_api_key, revoke_api_key
 from account_service import delete_user_account, get_account_deletion_summary
+from image_service import save_generation_with_image, get_user_generations, get_generation_by_id, get_remaining_image_slots
 from datetime import datetime, timezone
+from flask import send_file
+from io import BytesIO
 
 
 # ---------------------------------------------------------
@@ -160,7 +163,7 @@ def dashboard():
             "pack_250": Config.STRIPE_PRICE_PACK_250,
             "pack_500": Config.STRIPE_PRICE_PACK_500,
             "pack_1000": Config.STRIPE_PRICE_PACK_1000,
-            "pack_5000": Config.STRIPE_PRICE_PACK_5000,
+            "pack_2500": Config.STRIPE_PRICE_PACK_2500,
         }
     except Exception as e:
         # If Stripe prices aren't configured yet, use placeholders
@@ -169,7 +172,7 @@ def dashboard():
             "pack_250": "CONFIGURE_IN_ENV",
             "pack_500": "CONFIGURE_IN_ENV",
             "pack_1000": "CONFIGURE_IN_ENV",
-            "pack_5000": "CONFIGURE_IN_ENV",
+            "pack_2500": "CONFIGURE_IN_ENV",
         }
 
     return render_template(
@@ -505,12 +508,10 @@ def generate():
                 flash(f"Failed to generate image description: {str(e)}", "danger")
                 return render_template("generate.html", **form_data, error=True)
 
-            # Step 2: Generate the image
-            output_path = GENERATED_DIR / f"generated_{uuid.uuid4()}.png"
+            # Step 2: Generate the image (returns WebP bytes)
             try:
-                image_path = gen.generate_image(
+                image_data = gen.generate_image(
                     description=description,
-                    savepath=output_path,
                     reference_images=reference_paths,
                     image_size=data.size,
                     quality=data.quality,
@@ -528,23 +529,19 @@ def generate():
                     flash(f"Failed to generate image: {error_msg}", "danger")
                 return render_template("generate.html", **form_data, error=True)
 
-            # Step 3: Create generation record
-            generation = Generation(
+            # Step 3: Save generation with image data to MongoDB
+            generation = save_generation_with_image(
                 user=user,
+                image_data=image_data,
                 generation_type=gen_type,
                 quality=data.quality,
                 user_text=data.text,
                 user_prompt=data.prompt,
                 refined_description=description,
                 image_size=data.size,
-                image_url=f"/static/generated/{image_path.name}",
-                image_filename=image_path.name,
                 brushstrokes_used=brushstrokes_needed,
-                status="completed",
                 source="web",
-                completed_at=datetime.now(timezone.utc),
             )
-            generation.save()
 
             # Step 4: Record usage (deduct brushstrokes)
             try:
@@ -556,10 +553,11 @@ def generate():
                 flash(f"Warning: Image generated but failed to record usage: {str(e)}", "warning")
 
             # Success! Show the generated image
-            flash(f"Image generated successfully! Used {brushstrokes_needed} brushstrokes.", "success")
+            remaining_slots = get_remaining_image_slots(user)
+            flash(f"Image generated successfully! Used {brushstrokes_needed} brushstrokes. ({remaining_slots} image slots remaining)", "success")
             return render_template(
                 "generate.html",
-                generated_image=url_for("static", filename=f"generated/{image_path.name}"),
+                generated_image_id=str(generation.id),
                 quality=data.quality,
                 description=description,
                 text=data.text,
@@ -600,6 +598,55 @@ def generate():
 
     # GET request - show empty form
     return render_template("generate.html", gen_type="character")
+
+
+# ---------------------------------------------------------
+# IMAGE LIBRARY AND SERVING ROUTES
+# ---------------------------------------------------------
+
+@app.route("/image/<generation_id>")
+@login_required
+def serve_image(generation_id: str):
+    """Serve an image from MongoDB."""
+    user = get_current_user()
+    if not user:
+        return "Unauthorized", 401
+
+    generation = get_generation_by_id(generation_id, user)
+    if not generation or not generation.image_data:
+        return "Image not found", 404
+
+    # Serve the WebP image
+    return send_file(
+        BytesIO(generation.image_data),
+        mimetype="image/webp",
+        as_attachment=False,
+        download_name=f"generated_{generation_id}.webp"
+    )
+
+
+@app.route("/library")
+@login_required
+def library():
+    """View user's generation library."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Get user's generations
+    generations = get_user_generations(user, limit=100, include_without_images=False)
+
+    # Get remaining image slots
+    remaining_slots = get_remaining_image_slots(user)
+
+    return render_template(
+        "library.html",
+        user=user,
+        generations=generations,
+        remaining_slots=remaining_slots,
+        max_images=100
+    )
 
 
 # ---------------------------------------------------------

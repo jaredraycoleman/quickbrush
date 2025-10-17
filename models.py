@@ -23,6 +23,7 @@ from mongoengine import (
     DictField,
     EmbeddedDocumentField,
     ReferenceField,
+    BinaryField,
     NULLIFY,
 )
 import secrets
@@ -38,7 +39,7 @@ class SubscriptionTier(str, Enum):
     BASIC = "basic"  # $5/month - 250 brushstrokes/month
     PRO = "pro"  # $10/month - 500 brushstrokes/month
     PREMIUM = "premium"  # $20/month - 1000 brushstrokes/month
-    ULTIMATE = "ultimate"  # $50/month - 5000 brushstrokes/month
+    ULTIMATE = "ultimate"  # $50/month - 2500 brushstrokes/month
 
 
 TIER_ALLOWANCES = {
@@ -46,7 +47,7 @@ TIER_ALLOWANCES = {
     SubscriptionTier.BASIC: 250,
     SubscriptionTier.PRO: 500,
     SubscriptionTier.PREMIUM: 1000,
-    SubscriptionTier.ULTIMATE: 5000,
+    SubscriptionTier.ULTIMATE: 2500,
 }
 
 
@@ -375,6 +376,7 @@ class Generation(Document):
     Record of image generation requests.
 
     Stores all details about generated images for history and analytics.
+    Images are stored as binary WebP data in MongoDB (max 100 per user).
     """
     user = ReferenceField(User, required=True)
 
@@ -395,8 +397,12 @@ class Generation(Document):
 
     # Image details
     image_size = StringField(default="1024x1024")
-    image_url = StringField()  # URL/path to generated image
-    image_filename = StringField()
+    image_data = BinaryField()  # WebP image stored as binary data
+    image_format = StringField(default="webp")  # Always webp
+
+    # Legacy fields (deprecated but kept for backward compatibility)
+    image_url = StringField()  # Deprecated
+    image_filename = StringField()  # Deprecated
 
     # Reference images
     reference_image_urls = ListField(StringField())

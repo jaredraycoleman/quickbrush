@@ -72,24 +72,25 @@ class ImageGenerator(ABC):
     
     def generate_image(self,
                        description: str,
-                       savepath: pathlib.Path,
                        reference_images: List[pathlib.Path] = [],
                        model: str = "gpt-image-1-mini",
                        image_size: IMAGE_SIZE = "1024x1024",
                        quality: QUALITY = "medium",
-                       background: BACKGROUND = "transparent") -> pathlib.Path:
+                       background: BACKGROUND = "transparent") -> bytes:
         """
         Generate an image based on the provided prompt using OpenAI's API.
 
         Args:
             description (str): The prompt for the character description, which should include details about the character's appearance, personality, and any specific traits or features.
-            savepath (pathlib.Path): The path where the generated image will be saved.
+            reference_images (List[pathlib.Path]): Optional list of reference images.
             model (str): The OpenAI model to use for generation.
+            image_size (IMAGE_SIZE): Size of the generated image.
+            quality (QUALITY): Quality level for generation.
+            background (BACKGROUND): Background type (transparent, opaque, auto).
 
         Returns:
-            str: The generated image path.
+            bytes: WebP image data as bytes.
         """
-        output_format = savepath.suffix.lstrip('.').lower()
         if not reference_images:
             response = client.images.generate(
                 prompt=self.get_prompt(description),
@@ -116,20 +117,22 @@ class ImageGenerator(ABC):
 
         image_data = b64decode(response.data[0].b64_json)
 
-        # --- Use a temp file for intermediate PNG storage ---
+        # --- Convert PNG to WebP using Pillow ---
         with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
             temp_file.write(image_data)
             temp_png_path = pathlib.Path(temp_file.name)
 
-        # --- Convert to desired format using Pillow ---
+        # Convert to WebP format and return as bytes
         with Image.open(temp_png_path) as img:
-            savepath.parent.mkdir(parents=True, exist_ok=True)
-            img.save(savepath, format=output_format.upper())
+            from io import BytesIO
+            webp_buffer = BytesIO()
+            img.save(webp_buffer, format="WEBP", quality=95)
+            webp_data = webp_buffer.getvalue()
 
-        # --- Clean up the temp file ---
+        # Clean up the temp file
         temp_png_path.unlink(missing_ok=True)
 
-        return savepath.resolve()
+        return webp_data
     
     def restyle_image(self, image_path: pathlib.Path, savepath: pathlib.Path, model: str = "gpt-image-1-mini") -> pathlib.Path:
         """
