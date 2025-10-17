@@ -15,19 +15,9 @@ from typing import Optional, List, Literal
 from datetime import datetime
 import logging
 
-from models import (
-    User, Generation, ImageGenerationType, ImageQuality,
-    QUALITY_COSTS
-)
-from api_key_service import authenticate_api_key, get_user_api_keys, create_api_key, revoke_api_key
-from stripe_utils import record_generation
-from maker import (
-    CharacterImageGenerator, SceneImageGenerator,
-    CreatureImageGenerator, ItemImageGenerator,
-    IMAGE_SIZE, QUALITY
-)
-import pathlib
-import uuid
+from models import User, Generation
+from api_key_service import authenticate_api_key
+from generation_service import generate_image as generate_image_shared
 
 logger = logging.getLogger(__name__)
 
@@ -43,9 +33,6 @@ api = FastAPI(
 
 # Security
 security = HTTPBearer()
-
-GENERATED_DIR = pathlib.Path("static/generated")
-GENERATED_DIR.mkdir(parents=True, exist_ok=True)
 
 
 # ========================================
@@ -121,6 +108,7 @@ class GenerateImageResponse(BaseModel):
     refined_description: str
     brushstrokes_used: int
     brushstrokes_remaining: int
+    remaining_image_slots: int
     message: str
 
 
@@ -139,33 +127,6 @@ class UserInfoResponse(BaseModel):
     subscription_allowance_remaining: int
     purchased_brushstrokes: int
     current_period_end: Optional[datetime]
-
-
-class APIKeyInfo(BaseModel):
-    """Response model for API key information."""
-    key_id: str
-    name: str
-    key_prefix: str
-    is_active: bool
-    created_at: datetime
-    last_used_at: Optional[datetime]
-    total_requests: int
-    expires_at: Optional[datetime]
-
-
-class CreateAPIKeyRequest(BaseModel):
-    """Request model for creating an API key."""
-    name: str = Field(..., description="Name/description for this API key", min_length=1, max_length=100)
-    expires_in_days: Optional[int] = Field(None, description="Optional: Days until expiration", gt=0, le=365)
-
-
-class CreateAPIKeyResponse(BaseModel):
-    """Response model for API key creation."""
-    key_id: str
-    secret_key: str
-    name: str
-    expires_at: Optional[datetime]
-    message: str = "API key created successfully. Save the secret key - it won't be shown again!"
 
 
 # ========================================
@@ -243,128 +204,77 @@ async def generate_image(
     - Low quality: 1 brushstroke
     - Medium quality: 3 brushstrokes
     - High quality: 5 brushstrokes
+
+    **Note**: Images are stored as WebP format in MongoDB. Only the last 100 images per user are kept.
     """
-    # Calculate cost
-    brushstrokes_needed = QUALITY_COSTS.get(ImageQuality(request.quality), 3)
+    # Use shared generation service
+    result = generate_image_shared(
+        user=user,
+        text=request.text,
+        generation_type=request.generation_type,
+        quality=request.quality,
+        size=request.size,
+        prompt=request.prompt or "",
+        reference_image_paths=[],
+        source="api"
+    )
 
-    # Get subscription allowance
-    from stripe_utils import get_subscription_info
-    subscription_info_tuple = get_subscription_info(user)
-    monthly_allowance = subscription_info_tuple[1] if subscription_info_tuple else 0
-
-    # Check balance
-    current_balance = user.total_brushstrokes(monthly_allowance)
-    if current_balance < brushstrokes_needed:
-        raise HTTPException(
-            status_code=status.HTTP_402_PAYMENT_REQUIRED,
-            detail=f"Insufficient brushstrokes. Need {brushstrokes_needed}, have {current_balance}."
-        )
-
-    # Select generator
-    if request.generation_type == "character":
-        generator = CharacterImageGenerator()
-    elif request.generation_type == "scene":
-        generator = SceneImageGenerator()
-    elif request.generation_type == "creature":
-        generator = CreatureImageGenerator()
-    elif request.generation_type == "item":
-        generator = ItemImageGenerator()
-    else:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"Invalid generation_type: {request.generation_type}"
-        )
-
-    try:
-        # Step 1: Generate refined description
-        description = generator.get_description(
-            text=request.text,
-            prompt=request.prompt or ""
-        )
-
-        # Step 2: Generate image
-        output_path = GENERATED_DIR / f"api_generated_{uuid.uuid4()}.png"
-        image_path = generator.generate_image(
-            description=description,
-            savepath=output_path,
-            reference_images=[],
-            image_size=request.size,  # type: ignore
-            quality=request.quality,  # type: ignore
-        )
-
-        # Step 3: Create generation record
-        generation = Generation(
-            user=user,
-            generation_type=request.generation_type,
-            quality=request.quality,
-            user_text=request.text,
-            user_prompt=request.prompt,
-            refined_description=description,
-            image_size=request.size,
-            image_url=f"/static/generated/{image_path.name}",
-            image_filename=image_path.name,
-            brushstrokes_used=brushstrokes_needed,
-            status="completed",
-            source="api",
-        )
-        generation.save()
-
-        # Step 4: Deduct brushstrokes
-        success = record_generation(user, brushstrokes_needed, str(generation.id))
-        if not success:
-            # This shouldn't happen as we already checked, but handle it
-            generation.status = "failed"
-            generation.error_message = "Failed to deduct brushstrokes"
-            generation.save()
+    if not result.success:
+        # Determine appropriate status code
+        if "insufficient brushstrokes" in result.error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_402_PAYMENT_REQUIRED,
+                detail=result.error_message
+            )
+        elif "invalid generation_type" in result.error_message.lower():
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=result.error_message
+            )
+        else:
             raise HTTPException(
                 status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail="Failed to record usage"
+                detail=result.error_message
             )
 
-        generation.completed_at = datetime.now()
-        generation.save()
+    # Success - return response
+    return GenerateImageResponse(
+        success=True,
+        generation_id=result.generation_id,
+        image_url=f"/api/image/{result.generation_id}",
+        refined_description=result.refined_description,
+        brushstrokes_used=result.brushstrokes_used,
+        brushstrokes_remaining=result.brushstrokes_remaining,
+        remaining_image_slots=result.remaining_image_slots,
+        message="Image generated successfully"
+    )
 
-        # Return response (refresh user to get updated balance)
-        user.reload()
-        subscription_info_tuple = get_subscription_info(user)
-        monthly_allowance = subscription_info_tuple[1] if subscription_info_tuple else 0
 
-        return GenerateImageResponse(
-            success=True,
-            generation_id=str(generation.id),
-            image_url=generation.image_url,
-            refined_description=description,
-            brushstrokes_used=brushstrokes_needed,
-            brushstrokes_remaining=user.total_brushstrokes(monthly_allowance),
-            message="Image generated successfully"
-        )
+@api.get("/image/{generation_id}", tags=["Generation"])
+async def get_image(
+    generation_id: str,
+    user: User = Depends(get_current_user)
+):
+    """
+    Get a generated image by ID.
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Error generating image: {e}")
-        import traceback
-        traceback.print_exc()
+    Returns the WebP image data.
+    """
+    from image_service import get_generation_by_id
+    from fastapi.responses import Response
 
-        # Create failed generation record
-        generation = Generation(
-            user=user,
-            generation_type=request.generation_type,
-            quality=request.quality,
-            user_text=request.text,
-            user_prompt=request.prompt,
-            image_size=request.size,
-            brushstrokes_used=0,
-            status="failed",
-            error_message=str(e),
-            source="api",
-        )
-        generation.save()
-
+    generation = get_generation_by_id(generation_id, user)
+    if not generation or not generation.image_data:
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Image generation failed: {str(e)}"
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Image not found"
         )
+
+    return Response(
+        content=generation.image_data,
+        media_type="image/webp",
+        headers={"Content-Disposition": f'inline; filename="generated_{generation_id}.webp"'}
+    )
 
 
 @api.get("/generations", tags=["Generation"])
@@ -379,10 +289,17 @@ async def list_generations(
     **Parameters**:
     - limit: Maximum number of results (default: 10, max: 100)
     - offset: Number of results to skip (default: 0)
+
+    **Note**: Only the last 100 images are stored. Image URLs point to `/api/image/{id}`.
     """
     limit = min(limit, 100)
 
-    generations = Generation.objects(user=user).order_by('-created_at').skip(offset).limit(limit)
+    from image_service import get_user_generations
+
+    generations = get_user_generations(user, limit=limit, include_without_images=False)
+
+    # Skip offset manually since we're using the service
+    generations = generations[offset:]
 
     return {
         "generations": [
@@ -391,7 +308,7 @@ async def list_generations(
                 "generation_type": gen.generation_type,
                 "quality": gen.quality,
                 "user_text": gen.user_text,
-                "image_url": gen.image_url,
+                "image_url": f"/api/image/{str(gen.id)}",
                 "brushstrokes_used": gen.brushstrokes_used,
                 "status": gen.status,
                 "created_at": gen.created_at,
@@ -399,85 +316,17 @@ async def list_generations(
             }
             for gen in generations
         ],
-        "total": Generation.objects(user=user).count(),
+        "total": len(get_user_generations(user, limit=100, include_without_images=False)),
         "limit": limit,
         "offset": offset,
     }
 
 
 # ========================================
-# API KEY MANAGEMENT ENDPOINTS
+# API KEY MANAGEMENT
 # ========================================
-
-@api.get("/keys", response_model=List[APIKeyInfo], tags=["API Keys"])
-async def list_api_keys(user: User = Depends(get_current_user)):
-    """
-    List all API keys for the current user.
-    """
-    keys = get_user_api_keys(user, include_inactive=True)
-
-    return [
-        APIKeyInfo(
-            key_id=key.key_id,
-            name=key.name,
-            key_prefix=key.key_prefix,
-            is_active=key.is_active,
-            created_at=key.created_at,
-            last_used_at=key.last_used_at,
-            total_requests=key.total_requests,
-            expires_at=key.expires_at,
-        )
-        for key in keys
-    ]
-
-
-@api.post("/keys", response_model=CreateAPIKeyResponse, tags=["API Keys"])
-async def create_new_api_key(
-    request: CreateAPIKeyRequest,
-    user: User = Depends(get_current_user)
-):
-    """
-    Create a new API key.
-
-    **Important**: The secret key is only shown once. Save it securely!
-    """
-    api_key, secret = create_api_key(user, request.name, request.expires_in_days)
-
-    return CreateAPIKeyResponse(
-        key_id=api_key.key_id,
-        secret_key=f"{api_key.key_id}:{secret}",
-        name=api_key.name,
-        expires_at=api_key.expires_at,
-    )
-
-
-@api.delete("/keys/{key_id}", tags=["API Keys"])
-async def revoke_api_key_endpoint(
-    key_id: str,
-    user: User = Depends(get_current_user)
-):
-    """
-    Revoke (deactivate) an API key.
-
-    The key will be marked as inactive but not deleted.
-    """
-    from models import APIKey
-    api_key = APIKey.objects(key_id=key_id, user=user).first()
-
-    if not api_key:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="API key not found"
-        )
-
-    success = revoke_api_key(api_key)
-    if not success:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to revoke API key"
-        )
-
-    return {"message": "API key revoked successfully", "key_id": key_id}
+# Note: API key management is only available through the web UI
+# at /api-keys for security reasons.
 
 
 # ========================================

@@ -41,10 +41,12 @@ from stripe_utils import (
 )
 from api_key_service import get_user_api_keys, create_api_key, revoke_api_key
 from account_service import delete_user_account, get_account_deletion_summary
-from image_service import save_generation_with_image, get_user_generations, get_generation_by_id, get_remaining_image_slots
+from image_service import get_user_generations, get_generation_by_id, get_remaining_image_slots
+from generation_service import generate_image as generate_image_shared
 from datetime import datetime, timezone
 from flask import send_file
 from io import BytesIO
+import tempfile
 
 
 # ---------------------------------------------------------
@@ -447,22 +449,6 @@ def generate():
             flash("Please provide a description for your image.", "warning")
             return render_template("generate.html", **form_data, error=True)
 
-        brushstrokes_needed = token_cost(data.quality)
-
-        # Get subscription allowance
-        subscription_info_tuple = get_subscription_info(user)
-        monthly_allowance = subscription_info_tuple[1] if subscription_info_tuple else 0
-
-        current_balance = user.total_brushstrokes(monthly_allowance)
-
-        if current_balance < brushstrokes_needed:
-            flash(
-                f"Insufficient brushstrokes! You need {brushstrokes_needed} but only have {current_balance}. "
-                f'<a href="{url_for("dashboard")}" class="alert-link">Purchase more brushstrokes</a>.',
-                "warning"
-            )
-            return render_template("generate.html", **form_data, error=True)
-
         # Handle uploaded reference images (max 3)
         reference_paths = []
         uploaded_files = request.files.getlist("reference_images")
@@ -477,115 +463,49 @@ def generate():
                     if not any(filename.lower().endswith(ext) for ext in allowed_extensions):
                         flash(f"Invalid file type for '{filename}'. Allowed: PNG, JPG, JPEG, WEBP, GIF", "warning")
                         continue
-                    save_path = GENERATED_DIR / f"{uuid.uuid4()}_{filename}"
-                    file.save(save_path)
-                    reference_paths.append(save_path)
+                    # Save to temp file
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=pathlib.Path(filename).suffix) as tmp:
+                        file.save(tmp.name)
+                        reference_paths.append(pathlib.Path(tmp.name))
         except Exception as e:
             flash(f"Error uploading reference images: {str(e)}", "warning")
             # Continue without reference images
 
-        # Choose generator type
         gen_type = form_data["gen_type"]
-        if gen_type == "scene":
-            gen = SceneImageGenerator()
-        elif gen_type == "creature":
-            gen = CreatureImageGenerator()
-        elif gen_type == "item":
-            gen = ItemImageGenerator()
-        else:
-            gen = CharacterImageGenerator()
-
-        # Generate the image
-        description = None
-        image_path = None
-        generation = None
 
         try:
-            # Step 1: Generate description from text
-            try:
-                description = gen.get_description(text=data.text, prompt=data.prompt)
-            except Exception as e:
-                flash(f"Failed to generate image description: {str(e)}", "danger")
-                return render_template("generate.html", **form_data, error=True)
-
-            # Step 2: Generate the image (returns WebP bytes)
-            try:
-                image_data = gen.generate_image(
-                    description=description,
-                    reference_images=reference_paths,
-                    image_size=data.size,
-                    quality=data.quality,
-                )
-            except Exception as e:
-                error_msg = str(e)
-                # Provide more helpful error messages for common failures
-                if "rate_limit" in error_msg.lower():
-                    flash("OpenAI rate limit reached. Please wait a moment and try again.", "warning")
-                elif "insufficient_quota" in error_msg.lower():
-                    flash("OpenAI API quota exceeded. Please contact support.", "danger")
-                elif "invalid_api_key" in error_msg.lower():
-                    flash("API configuration error. Please contact support.", "danger")
-                else:
-                    flash(f"Failed to generate image: {error_msg}", "danger")
-                return render_template("generate.html", **form_data, error=True)
-
-            # Step 3: Save generation with image data to MongoDB
-            generation = save_generation_with_image(
+            # Use shared generation service
+            result = generate_image_shared(
                 user=user,
-                image_data=image_data,
+                text=data.text,
                 generation_type=gen_type,
                 quality=data.quality,
-                user_text=data.text,
-                user_prompt=data.prompt,
-                refined_description=description,
-                image_size=data.size,
-                brushstrokes_used=brushstrokes_needed,
-                source="web",
-            )
-
-            # Step 4: Record usage (deduct brushstrokes)
-            try:
-                success = record_generation(user, brushstrokes_needed, str(generation.id))
-                if not success:
-                    # This shouldn't happen as we already checked balance, but handle it anyway
-                    flash("Warning: Image generated but brushstrokes may not have been deducted. Please check your balance.", "warning")
-            except Exception as e:
-                flash(f"Warning: Image generated but failed to record usage: {str(e)}", "warning")
-
-            # Success! Show the generated image
-            remaining_slots = get_remaining_image_slots(user)
-            flash(f"Image generated successfully! Used {brushstrokes_needed} brushstrokes. ({remaining_slots} image slots remaining)", "success")
-            return render_template(
-                "generate.html",
-                generated_image_id=str(generation.id),
-                quality=data.quality,
-                description=description,
-                text=data.text,
+                size=data.size,
                 prompt=data.prompt,
-                gen_type=gen_type,
+                reference_image_paths=reference_paths,
+                source="web"
             )
 
-        except Exception as e:
-            # Catch-all for unexpected errors
-            flash(f"Unexpected error: {str(e)}", "danger")
-
-            # Create failed generation record if not already created
-            if not generation:
-                generation = Generation(
-                    user=user,
-                    generation_type=gen_type,
-                    quality=data.quality,
-                    user_text=data.text,
-                    user_prompt=data.prompt,
-                    image_size=data.size,
-                    brushstrokes_used=0,
-                    status="failed",
-                    error_message=str(e),
-                    source="web",
+            if result.success:
+                # Success!
+                flash(
+                    f"Image generated successfully! Used {result.brushstrokes_used} brushstrokes. "
+                    f"({result.remaining_image_slots} image slots remaining)",
+                    "success"
                 )
-                generation.save()
-
-            return render_template("generate.html", **form_data, error=True)
+                return render_template(
+                    "generate.html",
+                    generated_image_id=result.generation_id,
+                    quality=data.quality,
+                    description=result.refined_description,
+                    text=data.text,
+                    prompt=data.prompt,
+                    gen_type=gen_type,
+                )
+            else:
+                # Generation failed
+                flash(result.error_message, "danger")
+                return render_template("generate.html", **form_data, error=True)
 
         finally:
             # Clean up reference images after generation (success or failure)
@@ -597,7 +517,7 @@ def generate():
                     pass  # Ignore cleanup errors
 
     # GET request - show empty form
-    return render_template("generate.html", gen_type="character")
+    return render_template("generate.html", gen_type="character", quality="medium")
 
 
 # ---------------------------------------------------------

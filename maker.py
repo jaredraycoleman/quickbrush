@@ -1,15 +1,14 @@
 import logging
 import pathlib
-from typing import Iterable, List, Literal
-from base64 import b64decode
+from typing import Iterable, List, Literal, Optional
+from base64 import b64decode, b64encode
 from rembg import remove
 from abc import ABC, abstractmethod
 from PIL import Image
 import tempfile
 from openai import OpenAI
 import os
-
-import pathlib
+from io import BytesIO
 
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
@@ -22,14 +21,6 @@ def token_cost(quality: str) -> int:
     if quality == "high":
         return 5
     return 3  # default medium
-
-def convert_for_openai(path: pathlib.Path, format: str) -> pathlib.Path:
-    if path.suffix.lower() == f".{format}":
-        return path.resolve(strict=True)
-    image = Image.open(path)
-    with tempfile.NamedTemporaryFile(delete=False, suffix=f".{format}") as temp_file:
-        image.save(temp_file, format=format.upper())
-        return pathlib.Path(temp_file.name)
 
 def remove_background(image_path: pathlib.Path, savepath: pathlib.Path) -> pathlib.Path:
     """
@@ -72,7 +63,7 @@ class ImageGenerator(ABC):
     
     def generate_image(self,
                        description: str,
-                       reference_images: List[pathlib.Path] = [],
+                       reference_images_b64: Optional[List[str]] = None,
                        model: str = "gpt-image-1-mini",
                        image_size: IMAGE_SIZE = "1024x1024",
                        quality: QUALITY = "medium",
@@ -81,8 +72,8 @@ class ImageGenerator(ABC):
         Generate an image based on the provided prompt using OpenAI's API.
 
         Args:
-            description (str): The prompt for the character description, which should include details about the character's appearance, personality, and any specific traits or features.
-            reference_images (List[pathlib.Path]): Optional list of reference images.
+            description (str): The prompt for the character description.
+            reference_images_b64 (List[str]): Optional list of reference images as base64 PNG strings.
             model (str): The OpenAI model to use for generation.
             image_size (IMAGE_SIZE): Size of the generated image.
             quality (QUALITY): Quality level for generation.
@@ -91,7 +82,7 @@ class ImageGenerator(ABC):
         Returns:
             bytes: WebP image data as bytes.
         """
-        if not reference_images:
+        if not reference_images_b64:
             response = client.images.generate(
                 prompt=self.get_prompt(description),
                 background=background,
@@ -100,37 +91,55 @@ class ImageGenerator(ABC):
                 quality=quality
             )
         else:
-            response = client.images.edit(
-                prompt=self.get_prompt(description),
-                image=[
-                    convert_for_openai(img_path, "png")
-                    for img_path in reference_images
-                ],
-                background=background,
-                model=model,
-                size=image_size,
-                quality=quality
-            )
+            # OpenAI expects file-like objects, so we need to create temp files from base64
+            temp_files = []
+            try:
+                for b64_str in reference_images_b64:
+                    # Decode base64 to bytes
+                    img_bytes = b64decode(b64_str)
+
+                    # Create temp file with PNG extension
+                    temp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".png")
+                    temp_file.write(img_bytes)
+                    temp_file.close()
+                    temp_files.append(temp_file.name)
+
+                print(dict(
+                    prompt=self.get_prompt(description),
+                    image=[open(f, "rb") for f in temp_files],
+                    background=background,
+                    model=model,
+                    size=image_size,
+                    quality=quality
+                ))
+                raise Exception("Debugging - remove this line")  # Remove this line when implementing
+                # Call OpenAI with file paths
+                response = client.images.edit(
+                    prompt=self.get_prompt(description),
+                    image=[open(f, "rb") for f in temp_files],
+                    background=background,
+                    model=model,
+                    size=image_size,
+                    quality=quality
+                )
+            finally:
+                # Clean up temp files
+                for temp_path in temp_files:
+                    try:
+                        pathlib.Path(temp_path).unlink()
+                    except:
+                        pass
 
         if not response.data or not response.data[0].b64_json:
             raise ValueError("No image data returned from OpenAI API.")
 
         image_data = b64decode(response.data[0].b64_json)
 
-        # --- Convert PNG to WebP using Pillow ---
-        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as temp_file:
-            temp_file.write(image_data)
-            temp_png_path = pathlib.Path(temp_file.name)
-
-        # Convert to WebP format and return as bytes
-        with Image.open(temp_png_path) as img:
-            from io import BytesIO
+        # Convert PNG to WebP format
+        with Image.open(BytesIO(image_data)) as img:
             webp_buffer = BytesIO()
             img.save(webp_buffer, format="WEBP", quality=95)
             webp_data = webp_buffer.getvalue()
-
-        # Clean up the temp file
-        temp_png_path.unlink(missing_ok=True)
 
         return webp_data
     

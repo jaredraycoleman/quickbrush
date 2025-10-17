@@ -1,0 +1,24 @@
+# Testing dependencies for Quickbrush
+
+# Core testing framework
+pytest
+pytest-cov
+pytest-asyncio
+pytest-env
+pytest-mock
+
+# HTTP testing
+httpx
+
+# Mocking
+mongomock
+responses
+
+# Code quality
+pytest-flake8
+pytest-black
+pytest-mypy
+
+# Test utilities
+faker
+freezegun

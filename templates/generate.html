@@ -58,7 +58,7 @@
 
   <div class="mb-3">
     <label for="quality" class="form-label fw-bold">Quality</label>
-    <select class="form-select" name="quality" id="quality">
+    <select class="form-select" name="quality">
       <option value="low" {% if quality == 'low' %}selected{% endif %}>Low (1 brushstroke — quick sketch)</option>
       <option value="medium" {% if quality == 'medium' %}selected{% endif %}>Medium (3 brushstrokes — refined)</option>
       <option value="high" {% if quality == 'high' %}selected{% endif %}>High (5 brushstrokes — masterpiece)</option>
