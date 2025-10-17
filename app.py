@@ -1,3 +1,4 @@
+from typing import Optional
 import uuid
 import pathlib
 from urllib.parse import quote_plus, urlencode
@@ -32,17 +33,11 @@ from maker import (
 )
 from stripe_utils import (
     create_portal_session,
-    get_or_create_stripe_customer,
     record_generation,
-    create_subscription_checkout,
     create_pack_checkout,
     handle_checkout_completed,
-    handle_subscription_created,
-    handle_subscription_updated,
-    handle_subscription_deleted,
-    handle_invoice_paid,
-    verify_webhook_signature,
-    cancel_subscription,
+    check_and_renew_subscription,
+    get_subscription_info,
 )
 from api_key_service import get_user_api_keys, create_api_key, revoke_api_key
 from datetime import datetime, timezone
@@ -68,7 +63,7 @@ oauth.init_app(app)
 # Helper Functions
 # ---------------------------------------------------------
 
-def get_current_user() -> User:
+def get_current_user() -> Optional[User]:
     """Get current user from session and MongoDB."""
     if "user" not in session:
         return None
@@ -86,6 +81,10 @@ def get_current_user() -> User:
 
     # Get or create user in MongoDB
     user = get_or_create_user(auth0_sub, email, name, picture)
+
+    # Check if subscription needs renewal
+    check_and_renew_subscription(user)
+
     return user
 
 # ---------------------------------------------------------
@@ -133,30 +132,30 @@ def dashboard():
         flash("Error loading user data", "danger")
         return redirect(url_for("login"))
 
-    # Get subscription info
-    subscription = user.subscription if user.subscription else None
+    # Get subscription info from Stripe (single source of truth)
+    subscription_info_tuple = get_subscription_info(user)
     subscription_info = None
-    if subscription:
+    monthly_allowance = 0
+
+    if subscription_info_tuple and subscription_info_tuple[0]:
+        sub_dict, monthly_allowance = subscription_info_tuple
+        allowance_used = user.subscription.allowance_used_this_period if user.subscription else 0
         subscription_info = {
-            "tier": subscription.tier,
-            "status": subscription.status,
-            "monthly_allowance": subscription.monthly_allowance,
-            "allowance_used": subscription.allowance_used_this_period,
-            "allowance_remaining": subscription.remaining_allowance(),
-            "current_period_end": subscription.current_period_end,
-            "cancel_at_period_end": subscription.cancel_at_period_end,
+            "tier": sub_dict["tier"],
+            "status": sub_dict["status"],
+            "monthly_allowance": monthly_allowance,
+            "allowance_used": allowance_used,
+            "allowance_remaining": max(0, monthly_allowance - allowance_used),
+            "current_period_end": sub_dict["current_period_end"],
+            "cancel_at_period_end": sub_dict["cancel_at_period_end"],
         }
 
     # Get API keys
     api_keys = get_user_api_keys(user, include_inactive=False)
 
-    # Get Stripe price IDs (with fallbacks for missing config)
+    # Get Stripe price IDs for pack purchases only
     try:
         stripe_prices = {
-            "basic": Config.STRIPE_PRICE_BASIC,
-            "pro": Config.STRIPE_PRICE_PRO,
-            "premium": Config.STRIPE_PRICE_PREMIUM,
-            "ultimate": Config.STRIPE_PRICE_ULTIMATE,
             "pack_250": Config.STRIPE_PRICE_PACK_250,
             "pack_500": Config.STRIPE_PRICE_PACK_500,
             "pack_1000": Config.STRIPE_PRICE_PACK_1000,
@@ -164,12 +163,8 @@ def dashboard():
         }
     except Exception as e:
         # If Stripe prices aren't configured yet, use placeholders
-        print(f"Warning: Stripe prices not configured: {e}")
+        print(f"Warning: Stripe pack prices not configured: {e}")
         stripe_prices = {
-            "basic": "CONFIGURE_IN_ENV",
-            "pro": "CONFIGURE_IN_ENV",
-            "premium": "CONFIGURE_IN_ENV",
-            "ultimate": "CONFIGURE_IN_ENV",
             "pack_250": "CONFIGURE_IN_ENV",
             "pack_500": "CONFIGURE_IN_ENV",
             "pack_1000": "CONFIGURE_IN_ENV",
@@ -180,7 +175,7 @@ def dashboard():
         "dashboard.html",
         user=user,
         subscription=subscription_info,
-        total_brushstrokes=user.total_brushstrokes(),
+        total_brushstrokes=user.total_brushstrokes(monthly_allowance),
         purchased_brushstrokes=user.purchased_brushstrokes,
         api_keys=api_keys,
         stripe_prices=stripe_prices
@@ -190,6 +185,7 @@ def dashboard():
 @app.route("/portal")
 @login_required
 def portal():
+    """Redirect to Stripe Customer Portal for subscription management."""
     user = get_current_user()
     if not user:
         flash("Error loading user data", "danger")
@@ -201,61 +197,6 @@ def portal():
     except Exception as e:
         flash(f"Error creating portal session: {str(e)}", "danger")
         return redirect(url_for("dashboard"))
-
-
-# ---------------------------------------------------------
-# SUBSCRIPTION ROUTES
-# ---------------------------------------------------------
-
-@app.route("/subscribe")
-@login_required
-def subscribe():
-    """Initiate subscription checkout."""
-    user = get_current_user()
-    if not user:
-        flash("Error loading user data", "danger")
-        return redirect(url_for("dashboard"))
-
-    price_id = request.args.get("price_id")
-    if not price_id:
-        flash("Missing price_id parameter", "danger")
-        return redirect(url_for("dashboard"))
-
-    # Validate price_id
-    tiers = Config.get_subscription_tiers()
-    if price_id not in tiers:
-        flash("Invalid subscription tier", "danger")
-        return redirect(url_for("dashboard"))
-
-    # Create checkout session
-    success_url = url_for("checkout_success", _external=True) + "?session_id={CHECKOUT_SESSION_ID}"
-    cancel_url = url_for("dashboard", _external=True)
-
-    checkout_url = create_subscription_checkout(user, price_id, success_url, cancel_url)
-
-    if checkout_url:
-        return redirect(checkout_url)
-    else:
-        flash("Failed to create checkout session. Please try again.", "danger")
-        return redirect(url_for("dashboard"))
-
-
-@app.route("/cancel-subscription", methods=["POST"])
-@login_required
-def cancel_subscription_route():
-    """Cancel user's subscription."""
-    user = get_current_user()
-    if not user:
-        flash("Error loading user data", "danger")
-        return redirect(url_for("dashboard"))
-
-    success = cancel_subscription(user)
-    if success:
-        flash("Subscription canceled. You'll retain access until the end of your billing period.", "success")
-    else:
-        flash("Failed to cancel subscription. Please try again or contact support.", "danger")
-
-    return redirect(url_for("dashboard"))
 
 
 # ---------------------------------------------------------
@@ -314,49 +255,6 @@ def checkout_success():
     return redirect(url_for("dashboard"))
 
 
-# ---------------------------------------------------------
-# STRIPE WEBHOOKS
-# ---------------------------------------------------------
-
-@app.route("/webhooks/stripe", methods=["POST"])
-def stripe_webhook():
-    """Handle Stripe webhooks."""
-    payload = request.data
-    sig_header = request.headers.get("Stripe-Signature")
-
-    # Verify signature
-    if not verify_webhook_signature(payload, sig_header):
-        return {"error": "Invalid signature"}, 400
-
-    try:
-        import json
-        event = json.loads(payload)
-    except Exception as e:
-        return {"error": "Invalid payload"}, 400
-
-    event_type = event.get("type")
-    data_object = event.get("data", {}).get("object", {})
-
-    # Handle different event types
-    if event_type == "checkout.session.completed":
-        handle_checkout_completed(data_object.get("id"))
-
-    elif event_type == "customer.subscription.created":
-        handle_subscription_created(data_object.get("id"))
-
-    elif event_type == "customer.subscription.updated":
-        handle_subscription_updated(data_object.get("id"))
-
-    elif event_type == "customer.subscription.deleted":
-        handle_subscription_deleted(data_object.get("id"))
-
-    elif event_type == "invoice.paid":
-        handle_invoice_paid(data_object.get("id"))
-
-    else:
-        print(f"Unhandled webhook event: {event_type}")
-
-    return {"status": "success"}, 200
 
 
 # ---------------------------------------------------------
@@ -484,7 +382,12 @@ def generate():
             return render_template("generate.html", **form_data, error=True)
 
         brushstrokes_needed = token_cost(data.quality)
-        current_balance = user.total_brushstrokes()
+
+        # Get subscription allowance
+        subscription_info_tuple = get_subscription_info(user)
+        monthly_allowance = subscription_info_tuple[1] if subscription_info_tuple else 0
+
+        current_balance = user.total_brushstrokes(monthly_allowance)
 
         if current_balance < brushstrokes_needed:
             flash(
@@ -642,11 +545,11 @@ def generate():
 try:
     from api_routes import api as fastapi_app
     from werkzeug.middleware.dispatcher import DispatcherMiddleware
-    from fastapi.middleware.wsgi import WSGIMiddleware
+    from a2wsgi import ASGIMiddleware
 
-    # Mount FastAPI app at /api
+    # Mount FastAPI app at /api using a2wsgi to convert ASGI to WSGI
     app.wsgi_app = DispatcherMiddleware(app.wsgi_app, {
-        "/api": WSGIMiddleware(fastapi_app)
+        "/api": ASGIMiddleware(fastapi_app)
     })
 except Exception as e:
     print(f"Warning: Could not mount FastAPI app: {e}")

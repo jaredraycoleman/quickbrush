@@ -97,26 +97,25 @@ QUALITY_COSTS = {
 # ========================================
 
 class SubscriptionInfo(EmbeddedDocument):
-    """Embedded subscription information."""
-    tier = StringField(choices=[t.value for t in SubscriptionTier], default=SubscriptionTier.FREE.value)
-    status = StringField(choices=[s.value for s in SubscriptionStatus], default=SubscriptionStatus.ACTIVE.value)
+    """
+    Minimal subscription tracking in MongoDB.
+
+    Only stores usage data - all subscription details (tier, status, dates, etc.)
+    are fetched from Stripe on-demand to maintain a single source of truth.
+    """
+    # Stripe reference - this is the ONLY subscription data we store
     stripe_subscription_id = StringField(sparse=True)
-    stripe_price_id = StringField()
-    current_period_start = DateTimeField()
-    current_period_end = DateTimeField()
-    cancel_at_period_end = BooleanField(default=False)
-    monthly_allowance = IntField(default=0)  # Brushstrokes per month
-    allowance_used_this_period = IntField(default=0)  # How many used this billing period
-    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    # Usage tracking for current period - THIS is what we need to track
+    current_period_start = DateTimeField()  # Track period to know when to reset
+    allowance_used_this_period = IntField(default=0)  # How many brushstrokes used this period
+
     updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
 
-    def remaining_allowance(self) -> int:
-        """Calculate remaining subscription allowance for current period."""
-        return max(0, self.monthly_allowance - self.allowance_used_this_period)
-
-    def reset_allowance(self):
-        """Reset monthly allowance (called on subscription renewal)."""
+    def reset_allowance(self, new_period_start: datetime):
+        """Reset allowance for new billing period."""
         self.allowance_used_this_period = 0
+        self.current_period_start = new_period_start
         self.updated_at = datetime.now(timezone.utc)
 
 
@@ -168,27 +167,40 @@ class User(Document):
     def __str__(self):
         return f"User({self.email}, {self.auth0_sub})"
 
-    def total_brushstrokes(self) -> int:
+    def total_brushstrokes(self, subscription_allowance: int = 0) -> int:
         """
         Calculate total available brushstrokes.
-        = Subscription allowance remaining + Purchased packs
+
+        Args:
+            subscription_allowance: Current subscription allowance from Stripe
+
+        Returns:
+            Total brushstrokes = subscription allowance remaining + purchased packs
         """
-        subscription_remaining = self.subscription.remaining_allowance() if self.subscription else 0
+        subscription_used = self.subscription.allowance_used_this_period if self.subscription else 0
+        subscription_remaining = max(0, subscription_allowance - subscription_used)
         return subscription_remaining + self.purchased_brushstrokes
 
-    def use_brushstrokes(self, amount: int) -> bool:
+    def use_brushstrokes(self, amount: int, subscription_allowance: int = 0) -> bool:
         """
         Deduct brushstrokes from available balance.
         Priority: Subscription allowance first, then purchased packs.
 
-        Returns True if successful, False if insufficient balance.
+        Args:
+            amount: Number of brushstrokes to deduct
+            subscription_allowance: Total subscription allowance for current period
+
+        Returns:
+            True if successful, False if insufficient balance
         """
-        if self.total_brushstrokes() < amount:
+        if self.total_brushstrokes(subscription_allowance) < amount:
             return False
 
         # First, use subscription allowance
         if self.subscription:
-            allowance_remaining = self.subscription.remaining_allowance()
+            subscription_used = self.subscription.allowance_used_this_period
+            allowance_remaining = max(0, subscription_allowance - subscription_used)
+
             if allowance_remaining > 0:
                 used_from_allowance = min(amount, allowance_remaining)
                 self.subscription.allowance_used_this_period += used_from_allowance
@@ -206,28 +218,27 @@ class User(Document):
         self.purchased_brushstrokes += amount
         self.updated_at = datetime.now(timezone.utc)
 
-    def update_subscription(self, tier: SubscriptionTier, stripe_subscription_id: str,
-                          stripe_price_id: str, current_period_start: datetime,
-                          current_period_end: datetime, status: SubscriptionStatus = SubscriptionStatus.ACTIVE):
-        """Update subscription information."""
+    def set_subscription_id(self, stripe_subscription_id: str, period_start: datetime):
+        """
+        Set the Stripe subscription ID and initialize usage tracking.
+
+        This is called when a subscription is first created.
+        """
         if not self.subscription:
             self.subscription = SubscriptionInfo()
 
-        self.subscription.tier = tier.value
-        self.subscription.status = status.value
         self.subscription.stripe_subscription_id = stripe_subscription_id
-        self.subscription.stripe_price_id = stripe_price_id
-        self.subscription.current_period_start = current_period_start
-        self.subscription.current_period_end = current_period_end
-        self.subscription.monthly_allowance = TIER_ALLOWANCES[tier]
+        self.subscription.current_period_start = period_start
+        self.subscription.allowance_used_this_period = 0
         self.subscription.updated_at = datetime.now(timezone.utc)
         self.updated_at = datetime.now(timezone.utc)
 
-    def cancel_subscription(self):
-        """Mark subscription as canceled."""
+    def clear_subscription(self):
+        """Remove subscription reference when it's canceled/deleted."""
         if self.subscription:
-            self.subscription.status = SubscriptionStatus.CANCELED.value
-            self.subscription.cancel_at_period_end = True
+            self.subscription.stripe_subscription_id = None
+            self.subscription.current_period_start = None
+            self.subscription.allowance_used_this_period = 0
             self.subscription.updated_at = datetime.now(timezone.utc)
             self.updated_at = datetime.now(timezone.utc)
 

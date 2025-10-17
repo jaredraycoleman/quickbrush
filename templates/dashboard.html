@@ -70,55 +70,26 @@
           </div>
 
           <div>
-            {% if not subscription.cancel_at_period_end %}
-            <form method="POST" action="{{ url_for('cancel_subscription_route') }}" style="display: inline;">
-              <button type="submit" class="btn btn-sm btn-outline-danger"
-                      onclick="return confirm('Are you sure you want to cancel your subscription?{% if subscription.current_period_end %} You\'ll keep access until {{ subscription.current_period_end.strftime('%B %d, %Y') }}.{% endif %}');">
-                Cancel
-              </button>
-            </form>
-            {% endif %}
-            <a href="{{ url_for('portal') }}" class="btn btn-sm btn-outline-secondary">Manage</a>
+            <a href="{{ url_for('portal') }}" class="btn btn-primary">
+              <i class="bi bi-gear"></i> Manage Subscription
+            </a>
           </div>
         </div>
 
-        <button class="btn btn-sm btn-outline-primary mt-2" data-bs-toggle="modal" data-bs-target="#subscriptionModal">
-          Upgrade Plan
-        </button>
+        <p class="text-muted small mt-2">
+          Use the Customer Portal to upgrade, downgrade, or cancel your subscription.
+        </p>
 
       {% else %}
         <p class="text-muted mb-3">Subscribe for the best value — get monthly brushstroke allowances at half the cost!</p>
 
-        <div class="row g-2">
-          <div class="col-6 col-md-3">
-            <a href="{{ url_for('subscribe', price_id=stripe_prices.basic) }}" class="btn btn-outline-primary w-100">
-              <strong>Basic</strong><br>
-              <small>$5/mo</small><br>
-              <small class="text-muted">250 brushstrokes</small>
-            </a>
-          </div>
-          <div class="col-6 col-md-3">
-            <a href="{{ url_for('subscribe', price_id=stripe_prices.pro) }}" class="btn btn-outline-primary w-100">
-              <strong>Pro</strong><br>
-              <small>$10/mo</small><br>
-              <small class="text-muted">500 brushstrokes</small>
-            </a>
-          </div>
-          <div class="col-6 col-md-3">
-            <a href="{{ url_for('subscribe', price_id=stripe_prices.premium) }}" class="btn btn-outline-primary w-100">
-              <strong>Premium</strong><br>
-              <small>$20/mo</small><br>
-              <small class="text-muted">1000 brushstrokes</small>
-            </a>
-          </div>
-          <div class="col-6 col-md-3">
-            <a href="{{ url_for('subscribe', price_id=stripe_prices.ultimate) }}" class="btn btn-outline-primary w-100">
-              <strong>Ultimate</strong><br>
-              <small>$50/mo</small><br>
-              <small class="text-muted">5000 brushstrokes</small>
-            </a>
-          </div>
-        </div>
+        <a href="{{ url_for('portal') }}" class="btn btn-primary btn-lg">
+          <i class="bi bi-gear"></i> Manage Subscription
+        </a>
+
+        <p class="text-muted mt-2">
+          Choose from: Basic ($5/mo, 250), Pro ($10/mo, 500), Premium ($20/mo, 1000), or Ultimate ($50/mo, 5000 brushstrokes)
+        </p>
 
         <button class="btn btn-sm btn-link mt-2" data-bs-toggle="modal" data-bs-target="#pricingModal">
           Learn more about subscriptions
@@ -190,79 +161,6 @@
   </div>
 </div>
 
-<!-- Subscription Details Modal -->
-<div class="modal fade" id="subscriptionModal" tabindex="-1" aria-labelledby="subscriptionModalLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
-    <div class="modal-content">
-      <div class="modal-header bg-light">
-        <h5 class="modal-title" id="subscriptionModalLabel">Subscription Plans</h5>
-        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
-      <div class="modal-body">
-        <h6 class="fw-bold">Choose Your Plan</h6>
-        <p class="text-muted">All subscriptions include monthly brushstroke allowances that reset each billing cycle.</p>
-
-        <div class="list-group mb-3">
-          <a href="{{ url_for('subscribe', price_id=stripe_prices.basic) }}" class="list-group-item list-group-item-action">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <h6 class="mb-0">Basic Plan</h6>
-                <small class="text-muted">Perfect for casual creators</small>
-              </div>
-              <div class="text-end">
-                <strong>$5/month</strong><br>
-                <small class="text-muted">250 brushstrokes</small>
-              </div>
-            </div>
-          </a>
-
-          <a href="{{ url_for('subscribe', price_id=stripe_prices.pro) }}" class="list-group-item list-group-item-action">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <h6 class="mb-0">Pro Plan</h6>
-                <small class="text-muted">For regular artists</small>
-              </div>
-              <div class="text-end">
-                <strong>$10/month</strong><br>
-                <small class="text-muted">500 brushstrokes</small>
-              </div>
-            </div>
-          </a>
-
-          <a href="{{ url_for('subscribe', price_id=stripe_prices.premium) }}" class="list-group-item list-group-item-action">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <h6 class="mb-0">Premium Plan</h6>
-                <small class="text-muted">For serious creators</small>
-              </div>
-              <div class="text-end">
-                <strong>$20/month</strong><br>
-                <small class="text-muted">1000 brushstrokes</small>
-              </div>
-            </div>
-          </a>
-
-          <a href="{{ url_for('subscribe', price_id=stripe_prices.ultimate) }}" class="list-group-item list-group-item-action">
-            <div class="d-flex justify-content-between align-items-center">
-              <div>
-                <h6 class="mb-0">Ultimate Plan</h6>
-                <small class="text-muted">For power users</small>
-              </div>
-              <div class="text-end">
-                <strong>$50/month</strong><br>
-                <small class="text-muted">5000 brushstrokes</small>
-              </div>
-            </div>
-          </a>
-        </div>
-
-        <div class="alert alert-info">
-          <strong>💡 Best Value!</strong> Subscriptions cost $0.02 per brushstroke — that's 50% cheaper than one-time packs!
-        </div>
-      </div>
-    </div>
-  </div>
-</div>
 
 <!-- Pricing Modal -->
 <div class="modal fade" id="pricingModal" tabindex="-1" aria-labelledby="pricingModalLabel" aria-hidden="true">

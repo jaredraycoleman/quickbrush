@@ -24,6 +24,79 @@ client = StripeClient(api_key=Config.STRIPE_SECRET_KEY)
 
 
 # ========================================
+# SUBSCRIPTION INFO FETCHING
+# ========================================
+
+def get_subscription_info(user: User) -> Optional[Tuple[dict, int]]:
+    """
+    Get subscription info from Stripe (single source of truth).
+
+    Returns tuple of (subscription_dict, allowance), or (None, 0) if no active subscription.
+
+    Returns:
+        subscription_dict: {
+            "tier": str,  # "basic", "pro", etc.
+            "status": str,  # "active", "past_due", etc.
+            "current_period_start": datetime,
+            "current_period_end": datetime,
+            "cancel_at_period_end": bool,
+        }
+        allowance: int - monthly brushstroke allowance for this tier
+    """
+    if not user.subscription or not user.subscription.stripe_subscription_id:
+        return None, 0
+
+    try:
+        sub_id = str(user.subscription.stripe_subscription_id)
+        subscription = client.v1.subscriptions.retrieve(
+            sub_id,
+            params={"expand": ["items.data.price"]}
+        )
+
+        # Get subscription status
+        status = getattr(subscription, 'status', 'active')
+
+        # Get price ID
+        subscription_items = client.v1.subscription_items.list(params={"subscription": sub_id})
+        items_list = list(subscription_items)
+        price_id = str(items_list[0].price.id)
+
+        # Get tier and allowance from config
+        tiers = Config.get_subscription_tiers()
+        if price_id not in tiers:
+            logger.error(f"Unknown subscription price_id: {price_id}")
+            return None, 0
+
+        tier_name, allowance = tiers[price_id]
+
+        # Get period dates
+        current_period_start = getattr(subscription, 'current_period_start', None)
+        current_period_end = getattr(subscription, 'current_period_end', None)
+        cancel_at_period_end = getattr(subscription, 'cancel_at_period_end', False)
+
+        if current_period_start:
+            current_period_start = datetime.fromtimestamp(current_period_start, tz=timezone.utc)
+        if current_period_end:
+            current_period_end = datetime.fromtimestamp(current_period_end, tz=timezone.utc)
+
+        sub_dict = {
+            "tier": tier_name,
+            "status": status,
+            "current_period_start": current_period_start,
+            "current_period_end": current_period_end,
+            "cancel_at_period_end": cancel_at_period_end,
+        }
+
+        return sub_dict, allowance
+
+    except Exception as e:
+        logger.error(f"Error fetching subscription info from Stripe: {e}")
+        import traceback
+        traceback.print_exc()
+        return None, 0
+
+
+# ========================================
 # CUSTOMER MANAGEMENT
 # ========================================
 
@@ -174,10 +247,8 @@ def cancel_subscription(user: User) -> bool:
             }
         )
 
-        # Update user record
-        user.cancel_subscription()
-        user.save()
-
+        # Note: We don't need to update anything in MongoDB - cancellation is tracked in Stripe
+        # When subscription expires, the renewal check will handle cleanup
         logger.info(f"Canceled subscription for user {user.email}: {user.subscription.stripe_subscription_id}")
         return True
 
@@ -244,14 +315,14 @@ def create_pack_checkout(user: User, price_id: str, success_url: str, cancel_url
 
 
 # ========================================
-# WEBHOOK HANDLERS
+# CHECKOUT HANDLERS
 # ========================================
 
 def handle_checkout_completed(session_id: str) -> bool:
     """
-    Handle checkout.session.completed webhook.
+    Handle checkout completion (both subscriptions and one-time purchases).
 
-    This is called for both subscription signups and one-time pack purchases.
+    This is called from the success page redirect after checkout.
 
     Args:
         session_id: Stripe checkout session ID
@@ -280,8 +351,46 @@ def handle_checkout_completed(session_id: str) -> bool:
 
         # Check if it's a subscription or one-time purchase
         if session.mode == "subscription":
-            # Subscription checkout - will be handled by subscription webhook
-            logger.info(f"Subscription checkout completed for user {user.email}: {session_id}")
+            # Subscription checkout - set up the subscription
+            subscription_id = session.subscription
+            if not subscription_id:
+                logger.error(f"No subscription ID in session: {session_id}")
+                return False
+
+            # Retrieve subscription with expand parameter to get all fields
+            subscription = client.v1.subscriptions.retrieve(
+                subscription_id,
+                params={"expand": ["items.data.price"]}
+            )
+
+            # Get price ID and determine tier
+            # In Stripe SDK v13+, we need to list subscription items separately
+            subscription_items = client.v1.subscription_items.list(params={"subscription": subscription_id})
+            # Convert to list to access first item
+            items_list = list(subscription_items)
+            price_id = items_list[0].price.id
+            tiers = Config.get_subscription_tiers()
+
+            if price_id not in tiers:
+                logger.error(f"Unknown subscription price_id: {price_id}")
+                return False
+
+            tier_name, allowance = tiers[price_id]
+
+            # Get period start
+            current_period_start = getattr(subscription, 'current_period_start', None)
+            if current_period_start:
+                current_period_start = datetime.fromtimestamp(current_period_start, tz=timezone.utc)
+            else:
+                current_period_start = datetime.now(timezone.utc)
+
+            # Set subscription ID in user record (simplified - no redundant data)
+            user.set_subscription_id(subscription_id, current_period_start)
+            user.save()
+
+            # Note: We don't "grant" allowance - it's calculated on-demand from Stripe
+            # Just log the subscription creation
+            logger.info(f"Created subscription for user {user.email}: {tier_name} ({allowance} brushstrokes/month)")
             return True
 
         elif session.mode == "payment":
@@ -294,12 +403,16 @@ def handle_checkout_completed(session_id: str) -> bool:
             # Add brushstrokes to user
             user.add_purchased_brushstrokes(brushstrokes)
 
+            # Get subscription allowance to calculate total balance
+            subscription_info_tuple = get_subscription_info(user)
+            allowance = subscription_info_tuple[1] if subscription_info_tuple else 0
+
             # Record transaction
             transaction = BrushstrokeTransaction(
                 user=user,
                 transaction_type=TransactionType.PURCHASE.value,
                 amount=brushstrokes,
-                balance_after=user.total_brushstrokes(),
+                balance_after=user.total_brushstrokes(allowance),
                 stripe_payment_intent_id=session.payment_intent,
                 amount_paid_cents=session.amount_total,
                 description=f"Purchased {brushstrokes} brushstroke pack"
@@ -322,274 +435,86 @@ def handle_checkout_completed(session_id: str) -> bool:
         return False
 
 
-def handle_subscription_created(subscription_id: str) -> bool:
+
+
+# ========================================
+# SUBSCRIPTION RENEWAL CHECK
+# ========================================
+
+def check_and_renew_subscription(user: User) -> bool:
     """
-    Handle customer.subscription.created webhook.
+    Check if a user's subscription needs renewal and process it.
+
+    This replaces the webhook-based renewal system. Called when:
+    - User logs in
+    - User generates an image
+    - User checks their balance
 
     Args:
-        subscription_id: Stripe subscription ID
+        user: User object from MongoDB
 
     Returns:
-        True if handled successfully, False otherwise
+        True if subscription was renewed, False otherwise
     """
-    try:
-        subscription = client.v1.subscriptions.retrieve(subscription_id)
-
-        # Get user by customer ID
-        customer_id = subscription.customer
-        user = get_user_by_stripe_customer_id(customer_id)
-        if not user:
-            logger.error(f"User not found for subscription: {subscription_id}")
-            return False
-
-        # Get price ID and determine tier
-        price_id = subscription.items.data[0].price.id
-        tiers = Config.get_subscription_tiers()
-
-        if price_id not in tiers:
-            logger.error(f"Unknown subscription price_id: {price_id}")
-            return False
-
-        tier_name, allowance = tiers[price_id]
-        tier = SubscriptionTier(tier_name)
-
-        # Update user subscription
-        user.update_subscription(
-            tier=tier,
-            stripe_subscription_id=subscription_id,
-            stripe_price_id=price_id,
-            current_period_start=datetime.fromtimestamp(subscription.current_period_start, tz=timezone.utc),
-            current_period_end=datetime.fromtimestamp(subscription.current_period_end, tz=timezone.utc),
-            status=SubscriptionStatus(subscription.status)
-        )
-
-        # Grant initial allowance
-        transaction = BrushstrokeTransaction(
-            user=user,
-            transaction_type=TransactionType.SUBSCRIPTION_RENEWAL.value,
-            amount=allowance,
-            balance_after=user.total_brushstrokes(),
-            stripe_subscription_id=subscription_id,
-            subscription_period_start=user.subscription.current_period_start,
-            subscription_period_end=user.subscription.current_period_end,
-            description=f"Subscription created: {tier_name} ({allowance} brushstrokes/month)"
-        )
-        transaction.save()
-
-        user.save()
-
-        logger.info(f"Created subscription for user {user.email}: {tier_name}")
-        return True
-
-    except Exception as e:
-        logger.error(f"Error handling subscription created: {e}")
-        import traceback
-        traceback.print_exc()
+    if not user.subscription or not user.subscription.stripe_subscription_id:
         return False
 
-
-def handle_subscription_updated(subscription_id: str) -> bool:
-    """
-    Handle customer.subscription.updated webhook.
-
-    This handles subscription changes (upgrades, downgrades, cancellations).
-
-    Args:
-        subscription_id: Stripe subscription ID
-
-    Returns:
-        True if handled successfully, False otherwise
-    """
+    # Fetch subscription from Stripe to check if period has changed
     try:
-        subscription = client.v1.subscriptions.retrieve(subscription_id)
-
-        # Get user by customer ID
-        customer_id = subscription.customer
-        user = get_user_by_stripe_customer_id(customer_id)
-        if not user:
-            logger.error(f"User not found for subscription: {subscription_id}")
-            return False
-
-        # Get price ID and determine tier
-        price_id = subscription.items.data[0].price.id
-        tiers = Config.get_subscription_tiers()
-
-        if price_id not in tiers:
-            logger.error(f"Unknown subscription price_id: {price_id}")
-            return False
-
-        tier_name, allowance = tiers[price_id]
-        tier = SubscriptionTier(tier_name)
-
-        # Update user subscription
-        user.update_subscription(
-            tier=tier,
-            stripe_subscription_id=subscription_id,
-            stripe_price_id=price_id,
-            current_period_start=datetime.fromtimestamp(subscription.current_period_start, tz=timezone.utc),
-            current_period_end=datetime.fromtimestamp(subscription.current_period_end, tz=timezone.utc),
-            status=SubscriptionStatus(subscription.status)
+        subscription = client.v1.subscriptions.retrieve(
+            user.subscription.stripe_subscription_id,
+            params={"expand": ["items.data.price"]}
         )
 
-        if subscription.cancel_at_period_end:
-            user.subscription.cancel_at_period_end = True
-
-        user.save()
-
-        logger.info(f"Updated subscription for user {user.email}: {tier_name} (status: {subscription.status})")
-        return True
-
-    except Exception as e:
-        logger.error(f"Error handling subscription updated: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def handle_subscription_deleted(subscription_id: str) -> bool:
-    """
-    Handle customer.subscription.deleted webhook.
-
-    This is called when a subscription is canceled/expires.
-
-    Args:
-        subscription_id: Stripe subscription ID
-
-    Returns:
-        True if handled successfully, False otherwise
-    """
-    try:
-        subscription = client.v1.subscriptions.retrieve(subscription_id)
-
-        # Get user by customer ID
-        customer_id = subscription.customer
-        user = get_user_by_stripe_customer_id(customer_id)
-        if not user:
-            logger.error(f"User not found for subscription: {subscription_id}")
-            return False
-
-        # Cancel subscription
-        user.cancel_subscription()
-        user.save()
-
-        logger.info(f"Deleted subscription for user {user.email}: {subscription_id}")
-        return True
-
-    except Exception as e:
-        logger.error(f"Error handling subscription deleted: {e}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-
-def handle_invoice_paid(invoice_id: str) -> bool:
-    """
-    Handle invoice.paid webhook.
-
-    This is called when a subscription invoice is paid successfully.
-    We use this to grant the monthly brushstroke allowance.
-
-    Args:
-        invoice_id: Stripe invoice ID
-
-    Returns:
-        True if handled successfully, False otherwise
-    """
-    try:
-        invoice = client.v1.invoices.retrieve(invoice_id)
-
-        # Skip if this is the first invoice (subscription creation handles that)
-        if invoice.billing_reason == "subscription_create":
-            logger.info(f"Skipping initial subscription invoice: {invoice_id}")
-            return True
-
-        # Only handle subscription renewals
-        if invoice.billing_reason != "subscription_cycle":
-            logger.info(f"Skipping non-renewal invoice: {invoice_id} (reason: {invoice.billing_reason})")
-            return True
-
-        # Get user by customer ID
-        customer_id = invoice.customer
-        user = get_user_by_stripe_customer_id(customer_id)
-        if not user:
-            logger.error(f"User not found for invoice: {invoice_id}")
-            return False
-
-        # Get subscription
-        subscription_id = invoice.subscription
-        if not subscription_id:
-            logger.error(f"No subscription ID in invoice: {invoice_id}")
-            return False
-
-        subscription = client.v1.subscriptions.retrieve(subscription_id)
-
-        # Get price ID and determine tier
-        price_id = subscription.items.data[0].price.id
-        tiers = Config.get_subscription_tiers()
-
-        if price_id not in tiers:
-            logger.error(f"Unknown subscription price_id: {price_id}")
-            return False
-
-        tier_name, allowance = tiers[price_id]
-
-        # Reset subscription allowance
-        if user.subscription:
-            user.subscription.reset_allowance()
-            user.subscription.current_period_start = datetime.fromtimestamp(subscription.current_period_start, tz=timezone.utc)
-            user.subscription.current_period_end = datetime.fromtimestamp(subscription.current_period_end, tz=timezone.utc)
-
-            # Record transaction
-            transaction = BrushstrokeTransaction(
-                user=user,
-                transaction_type=TransactionType.SUBSCRIPTION_RENEWAL.value,
-                amount=allowance,
-                balance_after=user.total_brushstrokes(),
-                stripe_subscription_id=subscription_id,
-                subscription_period_start=user.subscription.current_period_start,
-                subscription_period_end=user.subscription.current_period_end,
-                description=f"Subscription renewed: {tier_name} ({allowance} brushstrokes/month)"
-            )
-            transaction.save()
-
+        # Check subscription status
+        subscription_status = getattr(subscription, 'status', 'active')
+        if subscription_status not in ["active", "trialing"]:
+            # Subscription is no longer active - clear it
+            logger.info(f"Subscription {subscription.id} is no longer active (status: {subscription_status})")
+            user.clear_subscription()
             user.save()
-
-            logger.info(f"Renewed subscription allowance for user {user.email}: {allowance} brushstrokes")
-            return True
-        else:
-            logger.error(f"User {user.email} has no subscription record")
             return False
 
+        # Get current period start from Stripe
+        stripe_period_start = getattr(subscription, 'current_period_start', None)
+        if not stripe_period_start:
+            return False
+
+        stripe_period_start_dt = datetime.fromtimestamp(stripe_period_start, tz=timezone.utc)
+
+        # Compare with stored period start
+        stored_period_start = user.subscription.current_period_start
+        if stored_period_start and stored_period_start.tzinfo is None:
+            stored_period_start = stored_period_start.replace(tzinfo=timezone.utc)
+
+        # If periods match, no renewal needed
+        if stored_period_start and stored_period_start == stripe_period_start_dt:
+            return False
+
+        # Period has changed! Reset the allowance
+        # Get the tier and allowance
+        subscription_items = client.v1.subscription_items.list(params={"subscription": user.subscription.stripe_subscription_id})
+        items_list = list(subscription_items)
+        price_id = items_list[0].price.id
+        tiers = Config.get_subscription_tiers()
+
+        if price_id not in tiers:
+            logger.error(f"Unknown subscription price_id: {price_id}")
+            return False
+
+        tier_name, allowance = tiers[price_id]
+
+        # Reset the allowance for the new period
+        user.subscription.reset_allowance(stripe_period_start_dt)
+        user.save()
+
+        logger.info(f"Renewed subscription for user {user.email}: {tier_name} ({allowance} brushstrokes/month)")
+        return True
+
     except Exception as e:
-        logger.error(f"Error handling invoice paid: {e}")
+        logger.error(f"Error checking subscription renewal: {e}")
         import traceback
         traceback.print_exc()
-        return False
-
-
-def verify_webhook_signature(payload: bytes, signature: str) -> bool:
-    """
-    Verify Stripe webhook signature.
-
-    Args:
-        payload: Raw request body
-        signature: Stripe-Signature header value
-
-    Returns:
-        True if signature is valid, False otherwise
-    """
-    if not Config.STRIPE_WEBHOOK_SECRET:
-        logger.warning("Stripe webhook secret not configured - skipping signature verification")
-        return True
-
-    try:
-        import stripe
-        stripe.Webhook.construct_event(
-            payload, signature, Config.STRIPE_WEBHOOK_SECRET
-        )
-        return True
-    except Exception as e:
-        logger.error(f"Webhook signature verification failed: {e}")
         return False
 
 
@@ -609,13 +534,18 @@ def record_generation(user: User, brushstrokes_used: int, generation_id: str = N
     Returns:
         True if successful, False if insufficient balance
     """
+    # Get subscription allowance from Stripe
+    subscription_info_tuple = get_subscription_info(user)
+    allowance = subscription_info_tuple[1] if subscription_info_tuple else 0
+
     # Check if user has enough brushstrokes
-    if user.total_brushstrokes() < brushstrokes_used:
-        logger.warning(f"Insufficient brushstrokes for user {user.email}: {user.total_brushstrokes()} < {brushstrokes_used}")
+    total_available = user.total_brushstrokes(allowance)
+    if total_available < brushstrokes_used:
+        logger.warning(f"Insufficient brushstrokes for user {user.email}: {total_available} < {brushstrokes_used}")
         return False
 
     # Deduct brushstrokes
-    success = user.use_brushstrokes(brushstrokes_used)
+    success = user.use_brushstrokes(brushstrokes_used, allowance)
     if not success:
         return False
 
@@ -627,7 +557,7 @@ def record_generation(user: User, brushstrokes_used: int, generation_id: str = N
         user=user,
         transaction_type=TransactionType.USAGE.value,
         amount=-brushstrokes_used,  # Negative for usage
-        balance_after=user.total_brushstrokes(),
+        balance_after=user.total_brushstrokes(allowance),
         generation=generation,
         description=f"Image generation ({brushstrokes_used} brushstrokes)"
     )

@@ -36,9 +36,9 @@ api = FastAPI(
     title="Quickbrush API",
     description="API for generating fantasy RPG artwork using AI",
     version="1.0.0",
-    docs_url="/api/docs",
-    redoc_url="/api/redoc",
-    openapi_url="/api/openapi.json"
+    docs_url="/docs",
+    redoc_url="/redoc",
+    openapi_url="/openapi.json"
 )
 
 # Security
@@ -72,6 +72,10 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
             detail="Invalid or expired API key",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    # Check if subscription needs renewal
+    from stripe_utils import check_and_renew_subscription
+    check_and_renew_subscription(user)
 
     return user
 
@@ -168,32 +172,47 @@ class CreateAPIKeyResponse(BaseModel):
 # API ENDPOINTS
 # ========================================
 
-@api.get("/api/health", tags=["System"])
+@api.get("/health", tags=["System"])
 async def health_check():
     """Health check endpoint."""
     return {"status": "ok", "service": "quickbrush-api"}
 
 
-@api.get("/api/user", response_model=UserInfoResponse, tags=["User"])
+@api.get("/user", response_model=UserInfoResponse, tags=["User"])
 async def get_user_info(user: User = Depends(get_current_user)):
     """
     Get current user information including subscription and brushstroke balance.
     """
-    subscription = user.subscription if user.subscription else None
+    # Get subscription info from Stripe (single source of truth)
+    from stripe_utils import get_subscription_info
+    subscription_info_tuple = get_subscription_info(user)
 
-    return UserInfoResponse(
-        email=user.email,
-        subscription_tier=subscription.tier if subscription else "free",
-        subscription_status=subscription.status if subscription else "none",
-        total_brushstrokes=user.total_brushstrokes(),
-        subscription_allowance_remaining=subscription.remaining_allowance() if subscription else 0,
-        purchased_brushstrokes=user.purchased_brushstrokes,
-        current_period_end=subscription.current_period_end if subscription else None,
-    )
+    if subscription_info_tuple and subscription_info_tuple[0]:
+        sub_dict, monthly_allowance = subscription_info_tuple
+        allowance_used = user.subscription.allowance_used_this_period if user.subscription else 0
+        return UserInfoResponse(
+            email=user.email,
+            subscription_tier=sub_dict["tier"],
+            subscription_status=sub_dict["status"],
+            total_brushstrokes=user.total_brushstrokes(monthly_allowance),
+            subscription_allowance_remaining=max(0, monthly_allowance - allowance_used),
+            purchased_brushstrokes=user.purchased_brushstrokes,
+            current_period_end=sub_dict["current_period_end"],
+        )
+    else:
+        return UserInfoResponse(
+            email=user.email,
+            subscription_tier="free",
+            subscription_status="none",
+            total_brushstrokes=user.total_brushstrokes(0),
+            subscription_allowance_remaining=0,
+            purchased_brushstrokes=user.purchased_brushstrokes,
+            current_period_end=None,
+        )
 
 
 @api.post(
-    "/api/generate",
+    "/generate",
     response_model=GenerateImageResponse,
     responses={
         400: {"model": ErrorResponse, "description": "Invalid request"},
@@ -228,8 +247,13 @@ async def generate_image(
     # Calculate cost
     brushstrokes_needed = QUALITY_COSTS.get(ImageQuality(request.quality), 3)
 
+    # Get subscription allowance
+    from stripe_utils import get_subscription_info
+    subscription_info_tuple = get_subscription_info(user)
+    monthly_allowance = subscription_info_tuple[1] if subscription_info_tuple else 0
+
     # Check balance
-    current_balance = user.total_brushstrokes()
+    current_balance = user.total_brushstrokes(monthly_allowance)
     if current_balance < brushstrokes_needed:
         raise HTTPException(
             status_code=status.HTTP_402_PAYMENT_REQUIRED,
@@ -300,14 +324,18 @@ async def generate_image(
         generation.completed_at = datetime.now()
         generation.save()
 
-        # Return response
+        # Return response (refresh user to get updated balance)
+        user.reload()
+        subscription_info_tuple = get_subscription_info(user)
+        monthly_allowance = subscription_info_tuple[1] if subscription_info_tuple else 0
+
         return GenerateImageResponse(
             success=True,
             generation_id=str(generation.id),
             image_url=generation.image_url,
             refined_description=description,
             brushstrokes_used=brushstrokes_needed,
-            brushstrokes_remaining=user.total_brushstrokes(),
+            brushstrokes_remaining=user.total_brushstrokes(monthly_allowance),
             message="Image generated successfully"
         )
 
@@ -339,7 +367,7 @@ async def generate_image(
         )
 
 
-@api.get("/api/generations", tags=["Generation"])
+@api.get("/generations", tags=["Generation"])
 async def list_generations(
     limit: int = 10,
     offset: int = 0,
@@ -381,7 +409,7 @@ async def list_generations(
 # API KEY MANAGEMENT ENDPOINTS
 # ========================================
 
-@api.get("/api/keys", response_model=List[APIKeyInfo], tags=["API Keys"])
+@api.get("/keys", response_model=List[APIKeyInfo], tags=["API Keys"])
 async def list_api_keys(user: User = Depends(get_current_user)):
     """
     List all API keys for the current user.
@@ -403,7 +431,7 @@ async def list_api_keys(user: User = Depends(get_current_user)):
     ]
 
 
-@api.post("/api/keys", response_model=CreateAPIKeyResponse, tags=["API Keys"])
+@api.post("/keys", response_model=CreateAPIKeyResponse, tags=["API Keys"])
 async def create_new_api_key(
     request: CreateAPIKeyRequest,
     user: User = Depends(get_current_user)
@@ -423,7 +451,7 @@ async def create_new_api_key(
     )
 
 
-@api.delete("/api/keys/{key_id}", tags=["API Keys"])
+@api.delete("/keys/{key_id}", tags=["API Keys"])
 async def revoke_api_key_endpoint(
     key_id: str,
     user: User = Depends(get_current_user)
