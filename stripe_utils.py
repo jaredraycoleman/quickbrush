@@ -19,6 +19,14 @@ from typing import Optional, Tuple
 import logging
 
 logger = logging.getLogger(__name__)
+# set logging level to DEBUG for detailed output
+logger.setLevel(logging.DEBUG)
+# set logger to print to console
+ch = logging.StreamHandler()
+ch.setLevel(logging.DEBUG)
+formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+ch.setFormatter(formatter)
+logger.addHandler(ch)
 
 client = StripeClient(api_key=Config.STRIPE_SECRET_KEY)
 
@@ -27,7 +35,7 @@ client = StripeClient(api_key=Config.STRIPE_SECRET_KEY)
 # SUBSCRIPTION INFO FETCHING
 # ========================================
 
-def get_subscription_info(user: User) -> Optional[Tuple[dict, int]]:
+def get_subscription_info(user: User) -> Tuple[Optional[dict], int]:
     """
     Get subscription info from Stripe (single source of truth).
 
@@ -43,11 +51,13 @@ def get_subscription_info(user: User) -> Optional[Tuple[dict, int]]:
         }
         allowance: int - monthly brushstroke allowance for this tier
     """
-    if not user.subscription or not user.subscription.stripe_subscription_id:
+    subscription_id = getattr(user.subscription, 'stripe_subscription_id', None)
+    if not user.subscription or not subscription_id:
+        logger.info(f"No active subscription for user {user.email}")
         return None, 0
 
     try:
-        sub_id = str(user.subscription.stripe_subscription_id)
+        sub_id = str(subscription_id)
         subscription = client.v1.subscriptions.retrieve(
             sub_id,
             params={"expand": ["items.data.price"]}
@@ -56,18 +66,61 @@ def get_subscription_info(user: User) -> Optional[Tuple[dict, int]]:
         # Get subscription status
         status = getattr(subscription, 'status', 'active')
 
-        # Get price ID
-        subscription_items = client.v1.subscription_items.list(params={"subscription": sub_id})
-        items_list = list(subscription_items)
-        price_id = str(items_list[0].price.id)
+        # IMPORTANT: The subscription items might have been updated mid-period (e.g., downgrade)
+        # But we need to give them the allowance for what they PAID FOR this period
+        # So we look at the LATEST INVOICE to see what was actually charged
 
-        # Get tier and allowance from config
+        # Get the latest invoice for this subscription to see what they paid for
+        try:
+            invoices = client.v1.invoices.list(params={"subscription": sub_id, "limit": 1})
+            latest_invoice = list(invoices)[0] if invoices else None
+
+            if latest_invoice:
+                # Get invoice items (includes proration credits/charges)
+                invoice_items = client.v1.invoice_items.list(params={"invoice": latest_invoice.id})
+
+                # Get all price IDs from the invoice and find the highest tier
+                tiers = Config.get_subscription_tiers()
+                max_allowance = 0
+                paid_price_id = None
+
+                for item in invoice_items:
+                    # Extract price ID from pricing field
+                    pricing = getattr(item, 'pricing', None)
+                    if pricing:
+                        price_details = getattr(pricing, 'price_details', None)
+                        if price_details:
+                            price = getattr(price_details, 'price', None)
+                            if price and str(price) in tiers:
+                                # Check if this tier has higher allowance
+                                _, allowance = tiers[str(price)]
+                                if allowance > max_allowance:
+                                    max_allowance = allowance
+                                    paid_price_id = str(price)
+
+                if not paid_price_id:
+                    # Fallback to subscription items if we can't find invoice item
+                    subscription_items = client.v1.subscription_items.list(params={"subscription": sub_id})
+                    items_list = subscription_items
+                    paid_price_id = str(items_list.data[0].price.id)
+            else:
+                # No invoice yet, use subscription items
+                subscription_items = client.v1.subscription_items.list(params={"subscription": sub_id})
+                items_list = subscription_items
+                paid_price_id = str(items_list.data[0].price.id)
+        except Exception as e:
+            logger.warning(f"Could not fetch latest invoice: {e}, falling back to subscription items")
+            subscription_items = client.v1.subscription_items.list(params={"subscription": sub_id})
+            items_list = subscription_items
+            paid_price_id = str(items_list.data[0].price.id)
+
+        # Get tier and allowance from config based on what they PAID for
         tiers = Config.get_subscription_tiers()
-        if price_id not in tiers:
-            logger.error(f"Unknown subscription price_id: {price_id}")
+        if paid_price_id not in tiers:
+            logger.error(f"Unknown subscription price_id: {paid_price_id}")
             return None, 0
 
-        tier_name, allowance = tiers[price_id]
+        current_tier_name, current_allowance = tiers[paid_price_id]
 
         # Get period dates
         current_period_start = getattr(subscription, 'current_period_start', None)
@@ -80,14 +133,16 @@ def get_subscription_info(user: User) -> Optional[Tuple[dict, int]]:
             current_period_end = datetime.fromtimestamp(current_period_end, tz=timezone.utc)
 
         sub_dict = {
-            "tier": tier_name,
+            "tier": current_tier_name,
             "status": status,
             "current_period_start": current_period_start,
             "current_period_end": current_period_end,
             "cancel_at_period_end": cancel_at_period_end,
         }
 
-        return sub_dict, allowance
+        # IMPORTANT: Return the CURRENT allowance, not the scheduled one
+        # This is what the user has access to RIGHT NOW for this billing period
+        return sub_dict, current_allowance
 
     except Exception as e:
         logger.error(f"Error fetching subscription info from Stripe: {e}")
@@ -114,9 +169,10 @@ def get_or_create_stripe_customer(user: User) -> str:
         Stripe customer ID
     """
     # If user already has a customer ID, return it
-    if user.stripe_customer_id:
-        logger.info(f"Found existing Stripe customer for user {user.email}: {user.stripe_customer_id}")
-        return user.stripe_customer_id
+    stripe_customer_id = getattr(user, 'stripe_customer_id', None)
+    if stripe_customer_id:
+        logger.info(f"Found existing Stripe customer for user {user.email}: {stripe_customer_id}")
+        return stripe_customer_id
 
     # Create new Stripe customer
     try:
@@ -166,96 +222,6 @@ def create_portal_session(user: User) -> str:
     except Exception as e:
         logger.error(f"Error creating portal session: {e}")
         raise
-
-
-# ========================================
-# SUBSCRIPTION MANAGEMENT
-# ========================================
-
-def create_subscription_checkout(user: User, price_id: str, success_url: str, cancel_url: str) -> Optional[str]:
-    """
-    Create a Stripe Checkout session for subscription signup.
-
-    Args:
-        user: User object from MongoDB
-        price_id: Stripe price ID for the subscription tier
-        success_url: URL to redirect after successful payment
-        cancel_url: URL to redirect if user cancels
-
-    Returns:
-        Checkout session URL, or None if error
-    """
-    customer_id = get_or_create_stripe_customer(user)
-
-    try:
-        # Validate price_id is a valid subscription tier
-        tiers = Config.get_subscription_tiers()
-        if price_id not in tiers:
-            logger.error(f"Invalid subscription price_id: {price_id}")
-            return None
-
-        tier_name, allowance = tiers[price_id]
-
-        session = client.v1.checkout.sessions.create(
-            params={
-                "customer": customer_id,
-                "payment_method_types": ["card"],
-                "line_items": [
-                    {
-                        "price": price_id,
-                        "quantity": 1,
-                    }
-                ],
-                "mode": "subscription",
-                "success_url": success_url,
-                "cancel_url": cancel_url,
-                "metadata": {
-                    "user_id": str(user.id),
-                    "tier": tier_name,
-                }
-            }
-        )
-
-        logger.info(f"Created subscription checkout session for user {user.email}: {session.id}")
-        return session.url
-
-    except Exception as e:
-        logger.error(f"Error creating subscription checkout: {e}")
-        return None
-
-
-def cancel_subscription(user: User) -> bool:
-    """
-    Cancel a user's subscription at period end.
-
-    Args:
-        user: User object from MongoDB
-
-    Returns:
-        True if successful, False otherwise
-    """
-    if not user.subscription or not user.subscription.stripe_subscription_id:
-        logger.warning(f"User {user.email} has no active subscription to cancel")
-        return False
-
-    try:
-        # Cancel at period end (so they keep access until end of billing period)
-        client.v1.subscriptions.update(
-            user.subscription.stripe_subscription_id,
-            params={
-                "cancel_at_period_end": True,
-            }
-        )
-
-        # Note: We don't need to update anything in MongoDB - cancellation is tracked in Stripe
-        # When subscription expires, the renewal check will handle cleanup
-        logger.info(f"Canceled subscription for user {user.email}: {user.subscription.stripe_subscription_id}")
-        return True
-
-    except Exception as e:
-        logger.error(f"Error canceling subscription: {e}")
-        return False
-
 
 # ========================================
 # ONE-TIME PURCHASE MANAGEMENT
