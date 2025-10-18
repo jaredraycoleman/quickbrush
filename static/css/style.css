@@ -1,0 +1,249 @@
+/* ========================================
+   QUICKBRUSH CUSTOM STYLES
+   ======================================== */
+
+/* Base Styles */
+html, body {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  display: flex;
+  flex-direction: column;
+  background: #f9f7f1;
+  font-family: 'Raleway', sans-serif;
+  color: #3c2f1b;
+  overflow-x: hidden;
+}
+
+/* Navigation */
+nav.navbar {
+  background: linear-gradient(90deg, #543a1e, #7a5226);
+  font-family: 'Marcellus SC', serif;
+  letter-spacing: 0.5px;
+}
+
+.navbar-brand {
+  font-size: 1.5rem;
+  color: #fef9e7 !important;
+}
+
+/* Buttons */
+.btn-wispy {
+  background-color: #da7b42;
+  border: none;
+  color: #fff;
+}
+
+.btn-wispy:hover {
+  background-color: #c86c36;
+  color: #fff;
+}
+
+/* Wispy Frame */
+.wispy-frame {
+  background: rgba(255, 255, 255, 0.9);
+  border: 2px solid #e2c290;
+  border-radius: 1rem;
+  padding: 2rem;
+  box-shadow: 0 0 12px rgba(0,0,0,0.1);
+}
+
+/* Layout */
+.main-content {
+  flex: 1 0 auto;
+}
+
+footer {
+  flex-shrink: 0;
+}
+
+/* ========================================
+   MOBILE RESPONSIVENESS (Tablets & Mobile)
+   ======================================== */
+@media (max-width: 768px) {
+  /* Base adjustments */
+  body {
+    font-size: 0.95rem;
+  }
+
+  /* Navbar */
+  .navbar-brand {
+    font-size: 1.2rem;
+  }
+
+  /* Container padding */
+  .container {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+
+  /* Wispy frame - reduce padding on mobile */
+  .wispy-frame {
+    padding: 1rem;
+    border-radius: 0.75rem;
+  }
+
+  /* Headers */
+  h1 {
+    font-size: 1.75rem;
+  }
+  h2 {
+    font-size: 1.5rem;
+  }
+  h3 {
+    font-size: 1.25rem;
+  }
+  h4 {
+    font-size: 1.1rem;
+  }
+  h5 {
+    font-size: 1rem;
+  }
+
+  /* Buttons */
+  .btn {
+    font-size: 0.9rem;
+    padding: 0.5rem 0.75rem;
+  }
+  .btn-lg {
+    font-size: 1rem;
+    padding: 0.75rem 1rem;
+  }
+  .btn-sm {
+    font-size: 0.8rem;
+    padding: 0.25rem 0.5rem;
+  }
+
+  /* Cards */
+  .card {
+    margin-bottom: 1rem;
+  }
+  .card-body {
+    padding: 1rem;
+  }
+
+  /* Text wrapping */
+  .text-md-start {
+    text-align: center !important;
+  }
+  .text-md-end {
+    text-align: center !important;
+  }
+
+  /* Prevent text overflow */
+  h1, h2, h3, h4, h5, h6, p, span, div {
+    word-wrap: break-word;
+    overflow-wrap: break-word;
+  }
+
+  /* Alert adjustments */
+  .alert {
+    font-size: 0.85rem;
+    padding: 0.75rem;
+  }
+
+  /* Modal adjustments */
+  .modal-dialog {
+    margin: 0.5rem;
+  }
+  .modal-body {
+    padding: 1rem;
+  }
+
+  /* Footer */
+  footer {
+    font-size: 0.85rem;
+  }
+  footer .text-md-start,
+  footer .text-md-end {
+    text-align: center !important;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Forms */
+  .form-label {
+    font-size: 0.9rem;
+  }
+  .form-control,
+  .form-select {
+    font-size: 0.9rem;
+  }
+  .form-text {
+    font-size: 0.8rem;
+  }
+
+  /* Gap adjustments */
+  .gap-2 {
+    gap: 0.5rem !important;
+  }
+  .gap-3 {
+    gap: 0.75rem !important;
+  }
+
+  /* Image sizing */
+  img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* Badge sizing */
+  .badge {
+    font-size: 0.75rem;
+  }
+
+  /* Progress bars */
+  .progress {
+    height: 20px !important;
+    font-size: 0.75rem;
+  }
+}
+
+/* ========================================
+   EXTRA SMALL DEVICES (Phones)
+   ======================================== */
+@media (max-width: 576px) {
+  .wispy-frame {
+    padding: 0.75rem;
+  }
+
+  h1 {
+    font-size: 1.5rem;
+  }
+  h2 {
+    font-size: 1.3rem;
+  }
+  h3 {
+    font-size: 1.15rem;
+  }
+
+  .btn {
+    font-size: 0.85rem;
+  }
+
+  /* Stack buttons vertically on very small screens */
+  .d-flex.flex-wrap > .btn {
+    width: 100%;
+    margin-bottom: 0.5rem;
+  }
+
+  /* Adjust navbar */
+  .navbar {
+    padding: 0.5rem 1rem;
+  }
+
+  /* Smaller margins and padding */
+  .mt-4 {
+    margin-top: 1rem !important;
+  }
+  .mb-4 {
+    margin-bottom: 1rem !important;
+  }
+  .pt-4 {
+    padding-top: 1rem !important;
+  }
+  .pb-4 {
+    padding-bottom: 1rem !important;
+  }
+}

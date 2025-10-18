@@ -46,6 +46,12 @@ if ENV_FILE:
 app = Flask(__name__)
 app.secret_key = Config.APP_SECRET_KEY
 
+# Configure session for better OAuth compatibility
+app.config['SESSION_COOKIE_SECURE'] = Config.FLASK_ENV == "production"  # HTTPS only in production
+app.config['SESSION_COOKIE_HTTPONLY'] = True  # Prevent XSS
+app.config['SESSION_COOKIE_SAMESITE'] = 'Lax'  # CSRF protection while allowing OAuth redirects
+app.config['PERMANENT_SESSION_LIFETIME'] = 86400  # 24 hours
+
 # Initialize MongoDB (fails gracefully if not configured)
 db_connected = init_db()
 if not db_connected:
@@ -108,9 +114,26 @@ def login():
 
 @app.route("/callback")
 def callback():
-    token = oauth.auth0.authorize_access_token() # type: ignore
-    session["user"] = token
-    return redirect(url_for("dashboard"))
+    try:
+        token = oauth.auth0.authorize_access_token() # type: ignore
+        session["user"] = token
+        return redirect(url_for("dashboard"))
+    except Exception as e:
+        # Log the error for debugging
+        import traceback
+        print(f"OAuth callback error: {e}")
+        traceback.print_exc()
+
+        # Clear any existing session data
+        session.clear()
+
+        # Provide user-friendly error message
+        flash(
+            "Authentication failed. This can happen if you took too long to log in or used the back button. "
+            "Please try logging in again.",
+            "warning"
+        )
+        return redirect(url_for("home"))
 
 @app.route("/privacy")
 def privacy():

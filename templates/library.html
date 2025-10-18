@@ -6,30 +6,38 @@
 <div class="container mt-4">
     <div class="row">
         <div class="col-12">
-            <div class="d-flex justify-content-between align-items-center mb-4">
-                <h1>
-                    <i class="bi bi-images"></i> Your Image Library
-                </h1>
-                <div class="d-flex gap-2">
-                    <a href="{{ url_for('generate') }}" class="btn btn-wispy">
-                        <i class="bi bi-plus-circle"></i> Generate New Image
-                    </a>
-                    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
-                        <i class="bi bi-house-door"></i> Dashboard
-                    </a>
+            <div class="row align-items-center mb-4">
+                <div class="col-12 col-md-6 mb-3 mb-md-0">
+                    <h1 style="font-size: clamp(1.5rem, 5vw, 2.5rem);">
+                        <i class="bi bi-images"></i> Your Image Library
+                    </h1>
+                </div>
+                <div class="col-12 col-md-6">
+                    <div class="row g-2">
+                        <div class="col-12 col-sm-6">
+                            <a href="{{ url_for('generate') }}" class="btn btn-wispy w-100">
+                                <i class="bi bi-plus-circle"></i> Generate New
+                            </a>
+                        </div>
+                        <div class="col-12 col-sm-6">
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary w-100">
+                                <i class="bi bi-house-door"></i> Dashboard
+                            </a>
+                        </div>
+                    </div>
                 </div>
             </div>
 
             <!-- Storage Info Alert -->
             <div class="alert alert-info mb-4">
                 <div class="row align-items-center">
-                    <div class="col-md-8">
+                    <div class="col-12 col-md-8 mb-2 mb-md-0">
                         <i class="bi bi-info-circle"></i>
                         <strong>Image Storage:</strong> Your last {{ max_images }} generations are stored in WebP format.
                         Older images are automatically removed when you exceed the limit.
                     </div>
-                    <div class="col-md-4 text-md-end">
-                        <span class="badge bg-primary fs-6">
+                    <div class="col-12 col-md-4 text-center text-md-end">
+                        <span class="badge bg-primary" style="font-size: 0.9rem;">
                             {{ generations|length }} / {{ max_images }} slots used
                         </span>
                         <br>
@@ -40,15 +48,15 @@
 
             {% if generations %}
             <!-- Image Grid -->
-            <div class="row g-4">
+            <div class="row g-3 g-md-4">
                 {% for gen in generations %}
-                <div class="col-md-6 col-lg-4">
+                <div class="col-12 col-sm-6 col-lg-4">
                     <div class="card h-100 shadow-sm">
-                        <div class="card-img-top position-relative" style="height: 300px; overflow: hidden; background-color: #f8f9fa;">
+                        <div class="card-img-top position-relative" style="height: 250px; overflow: hidden; background-color: #f8f9fa;">
                             <img src="{{ url_for('serve_image', generation_id=gen.id|string) }}"
                                  alt="{{ gen.generation_type|title }} - {{ gen.created_at.strftime('%Y-%m-%d') }}"
                                  class="w-100 h-100"
-                                 style="object-fit: cover; cursor: pointer;"
+                                 style="object-fit: contain; cursor: pointer; background: #fff;"
                                  data-bs-toggle="modal"
                                  data-bs-target="#imageModal{{ loop.index }}">
                         </div>
@@ -94,23 +102,23 @@
 
                 <!-- Image Detail Modal -->
                 <div class="modal fade" id="imageModal{{ loop.index }}" tabindex="-1" aria-labelledby="imageModalLabel{{ loop.index }}" aria-hidden="true">
-                    <div class="modal-dialog modal-xl modal-dialog-centered">
+                    <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
                         <div class="modal-content">
                             <div class="modal-header">
-                                <h5 class="modal-title" id="imageModalLabel{{ loop.index }}">
+                                <h5 class="modal-title" id="imageModalLabel{{ loop.index }}" style="font-size: clamp(1rem, 3vw, 1.25rem);">
                                     {{ gen.generation_type|title }} - {{ gen.created_at.strftime('%B %d, %Y') }}
                                 </h5>
                                 <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                             </div>
                             <div class="modal-body">
                                 <div class="row">
-                                    <div class="col-lg-8">
+                                    <div class="col-12 col-lg-8 mb-3 mb-lg-0">
                                         <img src="{{ url_for('serve_image', generation_id=gen.id|string) }}"
                                              alt="Generated Image"
-                                             class="img-fluid rounded shadow-sm mb-3"
+                                             class="img-fluid rounded shadow-sm"
                                              style="max-width: 100%; height: auto;">
                                     </div>
-                                    <div class="col-lg-4">
+                                    <div class="col-12 col-lg-4">
                                         <h6>Details</h6>
                                         <hr>
                                         <p><strong>Type:</strong> {{ gen.generation_type|title }}</p>

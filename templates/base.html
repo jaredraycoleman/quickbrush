@@ -2,10 +2,12 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <title>{{ title or "Quickbrush" }}</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <link href="https://fonts.googleapis.com/css2?family=Marcellus+SC&family=Raleway:wght@400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='images/wispy.ico') }}">
   <!-- open graph -->
   <meta property="og:title" content="{{ title or 'Quickbrush' }}">
@@ -13,50 +15,6 @@
   <meta property="og:image" content="{{ url_for('static', filename='images/og_image.webp', _external=True) }}">
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ request.url }}">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <style>
-    html, body {
-      height: 100%;
-      margin: 0;
-    }
-    body {
-      display: flex;
-      flex-direction: column;
-      background: #f9f7f1;
-      font-family: 'Raleway', sans-serif;
-      color: #3c2f1b;
-    }
-    nav.navbar {
-      background: linear-gradient(90deg, #543a1e, #7a5226);
-      font-family: 'Marcellus SC', serif;
-      letter-spacing: 0.5px;
-    }
-    .navbar-brand {
-      font-size: 1.5rem;
-      color: #fef9e7 !important;
-    }
-    .btn-wispy {
-      background-color: #da7b42;
-      border: none;
-      color: #fff;
-    }
-    .btn-wispy:hover {
-      background-color: #c86c36;
-    }
-    .wispy-frame {
-      background: rgba(255, 255, 255, 0.9);
-      border: 2px solid #e2c290;
-      border-radius: 1rem;
-      padding: 2rem;
-      box-shadow: 0 0 12px rgba(0,0,0,0.1);
-    }
-    .main-content {
-      flex: 1 0 auto;
-    }
-    footer {
-      flex-shrink: 0;
-    }
-  </style>
 </head>
 <body>
 <div class="main-content">
