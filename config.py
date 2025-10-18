@@ -69,3 +69,30 @@ class Config:
             cls.STRIPE_PRICE_PREMIUM: ("premium", 1000),
             cls.STRIPE_PRICE_ULTIMATE: ("ultimate", 2500),
         }
+
+    # ========================================
+    # RATE LIMITING CONFIGURATION
+    # ========================================
+
+    # Rate limit: 1 generation per X seconds
+    RATE_LIMIT_SECONDS = int(os.getenv("RATE_LIMIT_SECONDS", "10"))
+
+    # Rate limit: X generations per hour
+    RATE_LIMIT_PER_HOUR = int(os.getenv("RATE_LIMIT_PER_HOUR", "50"))
+
+    @classmethod
+    def get_rate_limits(cls):
+        """
+        Get rate limiting configuration.
+
+        Returns:
+            dict: Rate limit configuration with the following keys:
+                - seconds_limit: Maximum requests within seconds_window
+                - seconds_window: Time window in seconds for short-term limit
+                - hourly_limit: Maximum requests per hour
+        """
+        return {
+            "seconds_limit": 1,  # 1 generation
+            "seconds_window": cls.RATE_LIMIT_SECONDS,  # per 10 seconds (default)
+            "hourly_limit": cls.RATE_LIMIT_PER_HOUR,  # 50 generations per hour (default)
+        }

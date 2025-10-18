@@ -144,6 +144,17 @@ async def health_check():
     return {"status": "ok", "service": "quickbrush-api"}
 
 
+@api.get("/rate-limit", tags=["User"])
+async def get_rate_limit_status(user: User = Depends(get_current_user)):
+    """
+    Get current rate limit status for the authenticated user.
+
+    Returns information about current usage and limits for image generation.
+    """
+    from rate_limiter import get_rate_limit_status
+    return get_rate_limit_status(user, action="generate_image")
+
+
 @api.get("/user", response_model=UserInfoResponse, tags=["User"])
 async def get_user_info(user: User = Depends(get_current_user)):
     """
@@ -242,7 +253,12 @@ async def generate_image(
 
     if not result.success:
         # Determine appropriate status code
-        if "insufficient brushstrokes" in (result.error_message or "").lower():
+        if "rate limit exceeded" in (result.error_message or "").lower():
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail=result.error_message
+            )
+        elif "insufficient brushstrokes" in (result.error_message or "").lower():
             raise HTTPException(
                 status_code=status.HTTP_402_PAYMENT_REQUIRED,
                 detail=result.error_message

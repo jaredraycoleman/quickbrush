@@ -466,6 +466,43 @@ class Log(Document):
 
 
 # ========================================
+# RATE LIMIT MODEL
+# ========================================
+
+class RateLimit(Document):
+    """
+    Track generation attempts for rate limiting.
+
+    Uses MongoDB TTL index to automatically clean up old records after 1 hour.
+    """
+    user = ReferenceField(User, required=True)
+    action = StringField(required=True, default="generate_image")  # Action being rate limited
+    timestamp = DateTimeField(required=True, default=lambda: datetime.now(timezone.utc))
+
+    # Metadata
+    source = StringField(default="web", choices=["web", "api"])  # Where the request came from
+    generation_type = StringField()  # Optional: track what type of generation
+
+    meta = {
+        'collection': 'rate_limits',
+        'indexes': [
+            {
+                'fields': ['user', 'action', 'timestamp'],
+                'name': 'user_action_timestamp_idx'
+            },
+            {
+                'fields': ['timestamp'],
+                'name': 'timestamp_ttl_idx',
+                'expireAfterSeconds': 3600  # Auto-delete records older than 1 hour
+            }
+        ]
+    }
+
+    def __str__(self):
+        return f"RateLimit({self.user.email if self.user else 'unknown'}, {self.action}, {self.timestamp})" # type: ignore
+
+
+# ========================================
 # HELPER FUNCTIONS
 # ========================================
 

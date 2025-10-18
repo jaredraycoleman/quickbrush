@@ -14,6 +14,7 @@ from maker import (
 )
 from image_service import save_generation_with_image, get_remaining_image_slots
 from stripe_utils import get_subscription_info, record_generation
+from rate_limiter import check_rate_limit, record_attempt
 from typing import Optional, Tuple, List
 import pathlib
 import logging
@@ -110,6 +111,21 @@ def generate_image(
     # Calculate cost
     brushstrokes_needed = QUALITY_COSTS.get(ImageQuality(quality), 3)
 
+    # Check rate limit FIRST (before checking brushstrokes)
+    rate_limit_result = check_rate_limit(user, action="generate_image", source=source)
+    if not rate_limit_result.allowed:
+        if rate_limit_result.limit_type == "seconds":
+            error_message = f"Rate limit exceeded. Please wait {rate_limit_result.retry_after} seconds before generating another image."
+        else:  # hourly
+            minutes = rate_limit_result.retry_after // 60
+            error_message = f"Hourly rate limit exceeded. Please wait {minutes} minutes before generating more images."
+
+        return GenerationResult(
+            success=False,
+            error_message=error_message,
+            brushstrokes_remaining=0  # Don't expose balance when rate limited
+        )
+
     # Check balance
     has_sufficient, current_balance, error_msg = check_brushstroke_balance(user, brushstrokes_needed)
     if not has_sufficient:
@@ -136,6 +152,9 @@ def generate_image(
         )
 
     try:
+        # Record this generation attempt for rate limiting
+        record_attempt(user, action="generate_image", source=source, generation_type=generation_type)
+
         # Step 1: Generate refined description (include reference images so description is consistent)
         try:
             description = generator.get_description(
