@@ -1,0 +1,15 @@
+version: '3'
+services:
+  quickbrush:
+    image: jaredraycoleman/quickbrush:latest
+    build: .
+    ports:
+      - "5000:80"
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - FLASK_ENV=development
+    # Install full requirements.txt in dev mode (includes Obsidian tools)
+    command: sh -c "pip install -q -r requirements.txt && flask --app app:app --debug run --host 0.0.0.0 --port 80"

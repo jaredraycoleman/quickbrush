@@ -93,7 +93,7 @@ def home():
 @app.route("/login")
 def login():
     return oauth.auth0.authorize_redirect( # type: ignore
-        redirect_uri=url_for("callback", _external=True)
+        redirect_uri=url_for("callback", _external=True, _scheme="https" if Config.FLASK_ENV == "production" else "http")
     )
 
 @app.route("/callback")
@@ -101,6 +101,18 @@ def callback():
     token = oauth.auth0.authorize_access_token() # type: ignore
     session["user"] = token
     return redirect(url_for("dashboard"))
+
+@app.route("/privacy")
+def privacy():
+    """Privacy policy page."""
+    return render_template("privacy.html")
+
+
+@app.route("/terms")
+def terms():
+    """Terms and conditions page."""
+    return render_template("terms.html")
+
 
 @app.route("/logout")
 def logout():

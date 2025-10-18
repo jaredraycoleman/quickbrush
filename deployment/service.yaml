@@ -1,0 +1,216 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: quickbrush
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: quickbrush
+  name: quickbrush-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: quickbrush-service
+      app.kubernetes.io/part-of: quickbrush
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: quickbrush-service
+        app.kubernetes.io/part-of: quickbrush
+    spec:
+      # Uncomment the following lines if your Docker image is private
+      imagePullSecrets:
+        - name: dockerhub-credentials
+
+      containers:
+        - name: service
+          image: jaredraycoleman/quickbrush:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          env:
+            - name: FLASK_ENV
+              value: "production"
+            - name: DEPLOY_ID # for easy re-deployment
+              value: DEPLOYID-23b5e00b000bdeeeef3beeb76a1dc381
+
+            # Flask secret key
+            - name: APP_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: app-secret-key
+                  key: APP_SECRET_KEY
+
+            # Auth0 configuration
+            - name: AUTH0_DOMAIN
+              value: "quickbrush.us.auth0.com"  # Update with your Auth0 domain
+            - name: AUTH0_AUDIENCE
+              value: "https://quickbrush.online"  # Update with your API identifier
+            - name: AUTH0_CLIENT_ID
+              valueFrom:
+                secretKeyRef:
+                  name: auth0-credentials
+                  key: AUTH0_CLIENT_ID
+            - name: AUTH0_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: auth0-credentials
+                  key: AUTH0_CLIENT_SECRET
+            - name: AUTH0_CALLBACK_URL
+              value: "https://quickbrush.online/callback"
+
+            # MongoDB configuration
+            - name: MONGODB_URI
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-uri
+                  key: MONGODB_URI
+            - name: MONGODB_DB_NAME
+              value: "quickbrush"
+
+            # Stripe configuration
+            - name: STRIPE_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-credentials
+                  key: STRIPE_SECRET_KEY
+            - name: STRIPE_WEBHOOK_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-credentials
+                  key: STRIPE_WEBHOOK_SECRET
+            - name: PORTAL_RETURN_URL
+              value: "https://quickbrush.online/dashboard"
+
+            # Stripe Price IDs - Subscriptions
+            - name: STRIPE_PRICE_BASIC
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-prices
+                  key: STRIPE_PRICE_BASIC
+            - name: STRIPE_PRICE_PRO
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-prices
+                  key: STRIPE_PRICE_PRO
+            - name: STRIPE_PRICE_PREMIUM
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-prices
+                  key: STRIPE_PRICE_PREMIUM
+            - name: STRIPE_PRICE_ULTIMATE
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-prices
+                  key: STRIPE_PRICE_ULTIMATE
+
+            # Stripe Price IDs - Packs
+            - name: STRIPE_PRICE_PACK_250
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-prices
+                  key: STRIPE_PRICE_PACK_250
+            - name: STRIPE_PRICE_PACK_500
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-prices
+                  key: STRIPE_PRICE_PACK_500
+            - name: STRIPE_PRICE_PACK_1000
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-prices
+                  key: STRIPE_PRICE_PACK_1000
+            - name: STRIPE_PRICE_PACK_2500
+              valueFrom:
+                secretKeyRef:
+                  name: stripe-prices
+                  key: STRIPE_PRICE_PACK_2500
+
+            # OpenAI (if needed)
+            - name: OPENAI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: openai-credentials
+                  key: OPENAI_API_KEY
+                  optional: true
+
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 80
+            initialDelaySeconds: 45
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 80
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 10
+            failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: quickbrush
+  name: quickbrush-service
+spec:
+  selector:
+    app.kubernetes.io/name: quickbrush-service
+    app.kubernetes.io/part-of: quickbrush
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+  type: ClusterIP
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: quickbrush-service-ingress
+  namespace: quickbrush
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web, websecure
+    cert-manager.io/cluster-issuer: letsencrypt-issuer
+    traefik.ingress.kubernetes.io/router.middlewares: quickbrush-redirect-https@kubernetescrd
+spec:
+  rules:
+    - host: quickbrush.online
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: quickbrush-service
+                port:
+                  number: 80
+  tls:
+    - secretName: quickbrush-service-cert
+      hosts:
+        - quickbrush.online
+---
+# HTTPS redirect middleware
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-https
+  namespace: quickbrush
+spec:
+  redirectScheme:
+    scheme: https
+    permanent: true

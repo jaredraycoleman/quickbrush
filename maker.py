@@ -1,7 +1,6 @@
 import pathlib
 from typing import Dict, List, Literal, Optional, Union
 from base64 import b64decode, b64encode
-from rembg import remove
 from abc import ABC, abstractmethod
 from PIL import Image
 from openai import OpenAI
@@ -28,22 +27,6 @@ def convert_for_openai(path: pathlib.Path, format: str) -> pathlib.Path:
     with tempfile.NamedTemporaryFile(delete=False, suffix=f".{format}") as temp_file:
         image.save(temp_file, format=format.upper())
         return pathlib.Path(temp_file.name)
-
-def remove_background(image_path: pathlib.Path, savepath: pathlib.Path) -> pathlib.Path:
-    """
-    Remove the background from an image using rembg.
-
-    Args:
-        image_path (pathlib.Path): The path to the original image.
-        savepath (pathlib.Path): The path where the image with the background removed will be saved.
-
-    Returns:
-        pathlib.Path: The path to the image with the background removed.
-    """
-    output_image: bytes = remove(image_path.read_bytes(), force_return_bytes=True) # type: ignore
-    savepath.parent.mkdir(parents=True, exist_ok=True)
-    savepath.write_bytes(output_image)
-    return savepath.resolve()
 
 IMAGE_SIZE = Literal['256x256', '512x512', '1024x1024', '1536x1024', '1024x1536', 'auto']
 BACKGROUND = Literal["transparent", "opaque", "auto"]

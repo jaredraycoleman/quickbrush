@@ -4,6 +4,7 @@ load_dotenv()
 
 class Config:
     APP_SECRET_KEY: str = os.getenv("APP_SECRET_KEY", "replace-with-random-secret")
+    FLASK_ENV: str = os.getenv("FLASK_ENV", "development")
 
     # ========================================
     # AUTH0 CONFIGURATION
