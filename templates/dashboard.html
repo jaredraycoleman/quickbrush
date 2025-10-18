@@ -76,23 +76,46 @@
           </div>
         </div>
 
-        <p class="text-muted small mt-2 mb-0">
-          Use the Customer Portal to upgrade, downgrade, or cancel your subscription.
+        <p class="text-muted small mt-3 mb-0">
+          Use the Customer Portal to upgrade, downgrade, update payment methods, or cancel your subscription.
         </p>
 
       {% else %}
         <p class="text-muted mb-3">Subscribe for the best value — get monthly brushstroke allowances at half the cost!</p>
 
-        <a href="{{ url_for('portal') }}" class="btn btn-primary btn-lg">
-          <i class="bi bi-gear"></i> Manage Subscription
-        </a>
+        <div class="row g-2 mb-3">
+          <div class="col-6 col-lg-3">
+            <a href="{{ url_for('subscribe', price_id=stripe_prices.basic) }}" class="btn btn-outline-primary w-100">
+              <strong>Basic</strong><br>
+              <small>$5/mo</small><br>
+              <small>250 brushstrokes/mo</small>
+            </a>
+          </div>
+          <div class="col-6 col-lg-3">
+            <a href="{{ url_for('subscribe', price_id=stripe_prices.pro) }}" class="btn btn-outline-primary w-100">
+              <strong>Pro</strong><br>
+              <small>$10/mo</small><br>
+              <small>500 brushstrokes/mo</small>
+            </a>
+          </div>
+          <div class="col-6 col-lg-3">
+            <a href="{{ url_for('subscribe', price_id=stripe_prices.premium) }}" class="btn btn-outline-primary w-100">
+              <strong>Premium</strong><br>
+              <small>$20/mo</small><br>
+              <small>1000 brushstrokes/mo</small>
+            </a>
+          </div>
+          <div class="col-6 col-lg-3">
+            <a href="{{ url_for('subscribe', price_id=stripe_prices.ultimate) }}" class="btn btn-outline-primary w-100">
+              <strong>Ultimate</strong><br>
+              <small>$50/mo</small><br>
+              <small>2500 brushstrokes/mo</small>
+            </a>
+          </div>
+        </div>
 
-        <p class="text-muted mt-2">
-          Choose from: Basic ($5/mo, 250), Pro ($10/mo, 500), Premium ($20/mo, 1000), or Ultimate ($50/mo, 2500 brushstrokes)
-        </p>
-
-        <button class="btn btn-sm btn-link mt-2" data-bs-toggle="modal" data-bs-target="#pricingModal">
-          Learn more about subscriptions
+        <button class="btn btn-sm btn-link" data-bs-toggle="modal" data-bs-target="#pricingModal">
+          <i class="bi bi-info-circle"></i> Learn more about subscriptions
         </button>
       {% endif %}
     </div>

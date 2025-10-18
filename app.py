@@ -22,6 +22,7 @@ from maker import QUALITY, IMAGE_SIZE
 from stripe_utils import (
     create_portal_session,
     create_pack_checkout,
+    create_subscription_checkout,
     handle_checkout_completed,
     check_and_renew_subscription,
     get_subscription_info,
@@ -143,27 +144,38 @@ def dashboard():
             "allowance_remaining": max(0, monthly_allowance - allowance_used), # type: ignore
             "current_period_end": sub_dict["current_period_end"],
             "cancel_at_period_end": sub_dict["cancel_at_period_end"],
+            "scheduled_change": sub_dict.get("scheduled_change"),  # Include scheduled plan changes
         }
 
     # Get API keys
     api_keys = get_user_api_keys(user, include_inactive=False)
 
-    # Get Stripe price IDs for pack purchases only
+    # Get Stripe price IDs for both packs and subscriptions
     try:
         stripe_prices = {
+            # Packs
             "pack_250": Config.STRIPE_PRICE_PACK_250,
             "pack_500": Config.STRIPE_PRICE_PACK_500,
             "pack_1000": Config.STRIPE_PRICE_PACK_1000,
             "pack_2500": Config.STRIPE_PRICE_PACK_2500,
+            # Subscriptions
+            "basic": Config.STRIPE_PRICE_BASIC,
+            "pro": Config.STRIPE_PRICE_PRO,
+            "premium": Config.STRIPE_PRICE_PREMIUM,
+            "ultimate": Config.STRIPE_PRICE_ULTIMATE,
         }
     except Exception as e:
         # If Stripe prices aren't configured yet, use placeholders
-        print(f"Warning: Stripe pack prices not configured: {e}")
+        print(f"Warning: Stripe prices not configured: {e}")
         stripe_prices = {
             "pack_250": "CONFIGURE_IN_ENV",
             "pack_500": "CONFIGURE_IN_ENV",
             "pack_1000": "CONFIGURE_IN_ENV",
             "pack_2500": "CONFIGURE_IN_ENV",
+            "basic": "CONFIGURE_IN_ENV",
+            "pro": "CONFIGURE_IN_ENV",
+            "premium": "CONFIGURE_IN_ENV",
+            "ultimate": "CONFIGURE_IN_ENV",
         }
 
     return render_template(
@@ -223,6 +235,44 @@ def buy_pack():
     cancel_url = url_for("dashboard", _external=True)
 
     checkout_url = create_pack_checkout(user, price_id, success_url, cancel_url)
+
+    if checkout_url:
+        return redirect(checkout_url)
+    else:
+        flash("Failed to create checkout session. Please try again.", "danger")
+        return redirect(url_for("dashboard"))
+
+
+@app.route("/subscribe")
+@login_required
+def subscribe():
+    """Initiate subscription purchase."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    price_id = request.args.get("price_id")
+    if not price_id:
+        flash("Missing price_id parameter", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Check if user already has a subscription
+    if user.subscription and user.subscription.stripe_subscription_id: # type: ignore
+        flash("You already have an active subscription. Use the portal to manage it.", "warning")
+        return redirect(url_for("dashboard"))
+
+    # Validate price_id
+    tiers = Config.get_subscription_tiers()
+    if price_id not in tiers:
+        flash("Invalid subscription tier", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Create checkout session
+    success_url = url_for("checkout_success", _external=True) + "?session_id={CHECKOUT_SESSION_ID}"
+    cancel_url = url_for("dashboard", _external=True)
+
+    checkout_url = create_subscription_checkout(user, price_id, success_url, cancel_url)
 
     if checkout_url:
         return redirect(checkout_url)
