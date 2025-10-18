@@ -1,6 +1,10 @@
 # Generated images
 static/generated/
 
+# Secrets and deployment configuration
+.env.deploy
+deployment/secrets.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[codz]

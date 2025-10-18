@@ -46,8 +46,18 @@ if ENV_FILE:
 app = Flask(__name__)
 app.secret_key = Config.APP_SECRET_KEY
 
-# Initialize MongoDB
-init_db()
+# Initialize MongoDB (fails gracefully if not configured)
+db_connected = init_db()
+if not db_connected:
+    print("=" * 80)
+    print("⚠️  WARNING: MongoDB is not connected!")
+    print("=" * 80)
+    print("To fix this:")
+    print("1. Configure MongoDB Atlas IP whitelist (see instructions below)")
+    print("2. Set MONGODB_URI secret in Kubernetes")
+    print("")
+    print("The application will start but database features will be unavailable.")
+    print("=" * 80)
 
 # Initialize Auth0 (via auth.py)
 oauth.init_app(app)

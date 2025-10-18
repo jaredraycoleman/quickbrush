@@ -18,14 +18,13 @@ class Config:
     # ========================================
     # MONGODB CONFIGURATION
     # ========================================
-    MONGODB_URI: str = os.environ["MONGODB_URI"]
+    MONGODB_URI: str = os.environ.get("MONGODB_URI", "")
     MONGODB_DB_NAME: str = os.environ.get("MONGODB_DB_NAME", "quickbrush")
 
     # ========================================
     # STRIPE CONFIGURATION
     # ========================================
     STRIPE_SECRET_KEY: str = os.environ["STRIPE_SECRET_KEY"]
-    STRIPE_WEBHOOK_SECRET: str = os.environ.get("STRIPE_WEBHOOK_SECRET", "")
 
     PORTAL_RETURN_URL: str = os.environ["PORTAL_RETURN_URL"]
 

@@ -11,24 +11,53 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+# Global flag to track if database is available
+_db_available = False
+
 
 def init_db():
     """
     Initialize MongoDB connection.
 
     Connects to MongoDB using the connection string from config.
+    Returns True if connection successful, False otherwise.
     """
+    global _db_available
+
+    # Check if MONGODB_URI is configured
+    if not Config.MONGODB_URI or Config.MONGODB_URI == "":
+        logger.error("MONGODB_URI environment variable is not set!")
+        logger.error("Please set the MONGODB_URI secret in Kubernetes")
+        _db_available = False
+        return False
+
+    # Check if it's the default localhost (not configured properly)
+    if "localhost" in Config.MONGODB_URI or "127.0.0.1" in Config.MONGODB_URI:
+        logger.error("MONGODB_URI is set to localhost - please configure MongoDB Atlas URI")
+        _db_available = False
+        return False
+
     try:
         connect(
             db=Config.MONGODB_DB_NAME,
             host=Config.MONGODB_URI,
             uuidRepresentation='standard',
+            serverSelectionTimeoutMS=5000,  # Fail fast - 5 second timeout
+            connectTimeoutMS=5000,
         )
         logger.info(f"Successfully connected to MongoDB: {Config.MONGODB_DB_NAME}")
+        _db_available = True
         return True
     except Exception as e:
         logger.error(f"Failed to connect to MongoDB: {e}")
-        raise
+        logger.error("Application will run in limited mode without database")
+        _db_available = False
+        return False
+
+
+def is_db_available():
+    """Check if database connection is available."""
+    return _db_available
 
 
 def close_db():

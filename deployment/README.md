@@ -42,8 +42,7 @@ kubectl -n quickbrush create secret generic mongodb-uri \
 
 # Stripe
 kubectl -n quickbrush create secret generic stripe-credentials \
-  --from-literal=STRIPE_SECRET_KEY=sk_live_... \
-  --from-literal=STRIPE_WEBHOOK_SECRET=whsec_...
+  --from-literal=STRIPE_SECRET_KEY=sk_live_...
 
 # Stripe Prices
 kubectl -n quickbrush create secret generic stripe-prices \
@@ -196,8 +195,7 @@ kubectl apply -f deployment/service.yaml
 # Update a secret
 kubectl -n quickbrush delete secret stripe-credentials
 kubectl -n quickbrush create secret generic stripe-credentials \
-  --from-literal=STRIPE_SECRET_KEY=new_value \
-  --from-literal=STRIPE_WEBHOOK_SECRET=new_value
+  --from-literal=STRIPE_SECRET_KEY=new_value
 
 # Restart pods to pick up new secret
 kubectl -n quickbrush rollout restart deployment quickbrush-service

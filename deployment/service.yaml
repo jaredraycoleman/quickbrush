@@ -34,7 +34,7 @@ spec:
             - name: FLASK_ENV
               value: "production"
             - name: DEPLOY_ID # for easy re-deployment
-              value: DEPLOYID-23b5e00b000bdeeeef3beeb76a1dc381
+              value: DEPLOYID-e50281ee84470cf708a0899308ee147d
 
             # Flask secret key
             - name: APP_SECRET_KEY
@@ -76,11 +76,6 @@ spec:
                 secretKeyRef:
                   name: stripe-credentials
                   key: STRIPE_SECRET_KEY
-            - name: STRIPE_WEBHOOK_SECRET
-              valueFrom:
-                secretKeyRef:
-                  name: stripe-credentials
-                  key: STRIPE_WEBHOOK_SECRET
             - name: PORTAL_RETURN_URL
               value: "https://quickbrush.online/dashboard"
 
