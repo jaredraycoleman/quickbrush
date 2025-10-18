@@ -1,0 +1,78 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="wispy-frame">
+  <div class="text-center mb-4">
+    <img src="{{ url_for('static', filename='images/wispy.webp') }}"
+         alt="Wispy Icon" style="width:60px; height:60px; margin-bottom:1rem;">
+    <h2 class="mb-3">Support</h2>
+  </div>
+
+  <div class="card border-0 shadow-sm">
+    <div class="card-body text-center p-5">
+      <i class="bi bi-envelope-fill text-secondary" style="font-size: 3rem; margin-bottom: 1.5rem; display: block;"></i>
+
+      <h4 class="mb-3">Need Help?</h4>
+
+      <p class="lead mb-4">
+        We're here to help! For any questions, issues, or feedback, please reach out to our support team.
+      </p>
+
+      <div class="alert alert-light border mb-4" style="max-width: 500px; margin: 0 auto;">
+        <small class="text-muted d-block mb-2">Email us at:</small>
+        <a href="mailto:support@quickbrush.online" class="fs-5 fw-bold text-decoration-none">
+          support@quickbrush.online
+        </a>
+      </div>
+
+      <p class="text-muted small">
+        <i class="bi bi-clock"></i> We typically respond within 72 hours during business days.
+      </p>
+
+      <hr class="my-4">
+
+      <div class="d-flex gap-2 justify-content-center flex-wrap">
+        <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary">
+          <i class="bi bi-arrow-left"></i> Back to Dashboard
+        </a>
+        {% if session.user %}
+        <a href="{{ url_for('generate') }}" class="btn btn-wispy">
+          <i class="bi bi-brush"></i> Create Image
+        </a>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <div class="mt-4">
+    <div class="row g-3">
+      <div class="col-md-4">
+        <div class="card h-100 border-0 bg-light">
+          <div class="card-body text-center">
+            <i class="bi bi-question-circle text-secondary mb-2" style="font-size: 2rem;"></i>
+            <h6 class="mb-2">Common Questions</h6>
+            <small class="text-muted">Check our <a href="{{ url_for('terms') }}" class="text-decoration-none">Terms</a> and <a href="{{ url_for('privacy') }}" class="text-decoration-none">Privacy Policy</a> for common questions.</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100 border-0 bg-light">
+          <div class="card-body text-center">
+            <i class="bi bi-bug text-secondary mb-2" style="font-size: 2rem;"></i>
+            <h6 class="mb-2">Report a Bug</h6>
+            <small class="text-muted">Found a technical issue? Email us with details and screenshots if possible.</small>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-4">
+        <div class="card h-100 border-0 bg-light">
+          <div class="card-body text-center">
+            <i class="bi bi-lightbulb text-secondary mb-2" style="font-size: 2rem;"></i>
+            <h6 class="mb-2">Feature Requests</h6>
+            <small class="text-muted">Have an idea? We'd love to hear your suggestions for improving Quickbrush!</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

@@ -4,7 +4,7 @@ Image generation service for Quickbrush.
 Shared service for both web and API image generation to eliminate code duplication.
 """
 
-from models import User, ImageQuality, QUALITY_COSTS
+from models import User, ImageQuality, QUALITY_COSTS, AspectRatio, ASPECT_RATIO_SIZES, ImageGenerationType
 from maker import (
     CharacterImageGenerator,
     ImageGenerator,
@@ -68,7 +68,7 @@ def generate_image(
     text: str,
     generation_type: str,
     quality: str,
-    size: str = "1024x1024",
+    aspect_ratio: Optional[str] = None,
     prompt: str = "",
     reference_image_paths: List[pathlib.Path] | None = None,
     source: str = "web",
@@ -84,7 +84,7 @@ def generate_image(
         text: Description of the image to generate
         generation_type: Type of generation (character, scene, creature, item)
         quality: Quality level (low, medium, high)
-        size: Image size (default: "1024x1024")
+        aspect_ratio: Aspect ratio (square, landscape, portrait). If None, defaults to square for most types, landscape for scenes
         prompt: Additional context or prompt (default: "")
         reference_image_paths: List of reference image paths (default: None)
         source: Source of generation ("web" or "api", default: "web")
@@ -95,6 +95,17 @@ def generate_image(
     """
     if reference_image_paths is None:
         reference_image_paths = []
+
+    # Determine aspect ratio and size
+    if aspect_ratio is None:
+        # Default: square for all except scenes which default to landscape
+        if generation_type == ImageGenerationType.SCENE.value:
+            aspect_ratio = AspectRatio.LANDSCAPE.value
+        else:
+            aspect_ratio = AspectRatio.SQUARE.value
+
+    # Convert aspect ratio to size
+    size = ASPECT_RATIO_SIZES.get(AspectRatio(aspect_ratio), "1024x1024")
 
     # Calculate cost
     brushstrokes_needed = QUALITY_COSTS.get(ImageQuality(quality), 3)
@@ -174,6 +185,7 @@ def generate_image(
                 image_data=image_data,
                 generation_type=generation_type,
                 quality=quality,
+                aspect_ratio=aspect_ratio,
                 user_text=text,
                 user_prompt=prompt,
                 refined_description=description,

@@ -3,7 +3,7 @@
 <div class="wispy-frame">
   <div class="d-flex justify-content-between align-items-center mb-4">
     <h3 class="mb-0">
-      <img src="{{ url_for('static', filename='images/paintbrush.webp') }}"
+      <img src="{{ url_for('static', filename='images/wispy.webp') }}"
            alt="Brush Icon" style="width:22px; height:22px; vertical-align:middle; margin-right:6px;">
       Create with Quickbrush
     </h3>
@@ -66,6 +66,16 @@
     <div class="form-text">Higher quality = more detail, more brushstrokes.</div>
   </div>
 
+  <div class="mb-3">
+    <label for="aspect_ratio" class="form-label fw-bold">Aspect Ratio</label>
+    <select class="form-select" name="aspect_ratio" id="aspect_ratio">
+      <option value="square" {% if aspect_ratio == 'square' %}selected{% endif %}>⬜ Square (1024x1024)</option>
+      <option value="landscape" {% if aspect_ratio == 'landscape' %}selected{% endif %}>🖼️ Landscape (1536x1024)</option>
+      <option value="portrait" {% if aspect_ratio == 'portrait' %}selected{% endif %}>🖼️ Portrait (1024x1536)</option>
+    </select>
+    <div class="form-text">Choose the shape of your canvas. Default: Square for most, Landscape for scenes.</div>
+  </div>
+
   <div class="d-flex gap-2 align-items-center mt-3">
     <button type="submit" id="generate-btn" class="btn btn-wispy">
       <span id="btn-text">Generate Image</span>
@@ -124,6 +134,23 @@ const form = document.getElementById('generate-form');
 const btn = document.getElementById('generate-btn');
 const btnText = document.getElementById('btn-text');
 const loading = document.getElementById('loading');
+const genTypeSelect = document.getElementById('gen_type');
+const aspectRatioSelect = document.getElementById('aspect_ratio');
+
+// Set default aspect ratio based on generation type
+function updateDefaultAspectRatio() {
+  const genType = genTypeSelect.value;
+  // Only auto-update if user hasn't explicitly changed it
+  // Check if the current value matches the expected default for the previous type
+  if (genType === 'scene') {
+    aspectRatioSelect.value = 'landscape';
+  } else {
+    aspectRatioSelect.value = 'square';
+  }
+}
+
+// Update aspect ratio when generation type changes
+genTypeSelect.addEventListener('change', updateDefaultAspectRatio);
 
 // Form validation
 form.addEventListener('submit', (e) => {

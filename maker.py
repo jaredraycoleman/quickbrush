@@ -56,7 +56,7 @@ class ImageGenerator(ABC):
                        description: str,
                        reference_images: Optional[List[pathlib.Path]] = None,
                        model: str = "gpt-image-1-mini",
-                       image_size: IMAGE_SIZE = "1024x1024",
+                       image_size: IMAGE_SIZE = None,
                        quality: QUALITY = "medium",
                        background: BACKGROUND = "transparent") -> bytes:
         """
@@ -73,6 +73,10 @@ class ImageGenerator(ABC):
         Returns:
             bytes: WebP image data as bytes.
         """
+        # Use default image size if none provided
+        if image_size is None:
+            image_size = self.DEFAULT_IMAGE_SIZE
+
         if not reference_images:
             response = client.images.generate(
                 prompt=self.get_prompt(description),
@@ -193,7 +197,6 @@ class CharacterImageGenerator(ImageGenerator):
         return description
     
 class SceneImageGenerator(ImageGenerator):
-    DEFAULT_IMAGE_SIZE: IMAGE_SIZE = "1536x1024"
     def get_prompt(self, description: str) -> str:
         specific_prompt = f" featuring {description}" if description else ""
         prompt = (

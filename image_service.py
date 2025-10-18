@@ -71,6 +71,7 @@ def save_generation_with_image(
     refined_description: str,
     image_size: str,
     brushstrokes_used: int,
+    aspect_ratio: Optional[str] = None,
     source: str = "web",
     api_key=None
 ) -> Generation:
@@ -88,6 +89,7 @@ def save_generation_with_image(
         refined_description: GPT-4o refined description
         image_size: Image size
         brushstrokes_used: Number of brushstrokes used
+        aspect_ratio: Aspect ratio (square, landscape, portrait)
         source: Source of generation (web or api)
         api_key: Optional API key if from API
 
@@ -99,6 +101,7 @@ def save_generation_with_image(
         user=user,
         generation_type=generation_type,
         quality=quality,
+        aspect_ratio=aspect_ratio,
         user_text=user_text,
         user_prompt=user_prompt,
         refined_description=refined_description,

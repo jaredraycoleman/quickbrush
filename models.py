@@ -56,10 +56,23 @@ class ImageQuality(str, Enum):
     HIGH = "high"  # 5 brushstrokes
 
 
+class AspectRatio(str, Enum):
+    """Aspect ratio options for image generation."""
+    SQUARE = "square"  # 1024x1024
+    LANDSCAPE = "landscape"  # 1536x1024
+    PORTRAIT = "portrait"  # 1024x1536
+
+
 QUALITY_COSTS = {
     ImageQuality.LOW: 1,
     ImageQuality.MEDIUM: 3,
     ImageQuality.HIGH: 5,
+}
+
+ASPECT_RATIO_SIZES = {
+    AspectRatio.SQUARE: "1024x1024",
+    AspectRatio.LANDSCAPE: "1536x1024",
+    AspectRatio.PORTRAIT: "1024x1536",
 }
 
 
@@ -358,6 +371,10 @@ class Generation(Document):
     quality = StringField(
         required=True,
         choices=[q.value for q in ImageQuality]
+    )
+    aspect_ratio = StringField(
+        choices=[a.value for a in AspectRatio],
+        default=AspectRatio.SQUARE.value
     )
 
     # Input

@@ -83,9 +83,14 @@ class GenerateImageRequest(BaseModel):
         default="medium",
         description="Image quality (affects brushstroke cost: low=1, medium=3, high=5)"
     )
-    size: Literal["1024x1024", "1536x1024"] = Field(
-        default="1024x1024",
-        description="Image size in pixels"
+    aspect_ratio: Optional[Literal["square", "landscape", "portrait"]] = Field(
+        None,
+        description="Aspect ratio (square=1024x1024, landscape=1536x1024, portrait=1024x1536). Defaults to square for most types, landscape for scenes."
+    )
+    # Deprecated field - kept for backward compatibility
+    size: Optional[Literal["1024x1024", "1536x1024", "1024x1536"]] = Field(
+        None,
+        description="[DEPRECATED] Use aspect_ratio instead. Image size in pixels"
     )
 
     class Config:
@@ -95,7 +100,7 @@ class GenerateImageRequest(BaseModel):
                 "prompt": "Fantasy RPG character for my campaign",
                 "generation_type": "character",
                 "quality": "medium",
-                "size": "1024x1024"
+                "aspect_ratio": "square"
             }
         }
 
@@ -212,13 +217,24 @@ async def generate_image(
 
     **Note**: Images are stored as WebP format in MongoDB. Only the last 100 images per user are kept.
     """
+    # Handle backward compatibility: convert size to aspect_ratio if provided
+    aspect_ratio = request.aspect_ratio
+    if not aspect_ratio and request.size:
+        # Map old size values to aspect_ratio
+        size_to_aspect = {
+            "1024x1024": "square",
+            "1536x1024": "landscape",
+            "1024x1536": "portrait"
+        }
+        aspect_ratio = size_to_aspect.get(request.size)
+
     # Use shared generation service
     result = generate_image_shared(
         user=user,
         text=request.text,
         generation_type=request.generation_type,
         quality=request.quality,
-        size=request.size,
+        aspect_ratio=aspect_ratio,
         prompt=request.prompt or "",
         reference_image_paths=[],
         source="api"

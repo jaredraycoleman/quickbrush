@@ -124,6 +124,12 @@ def terms():
     return render_template("terms.html")
 
 
+@app.route("/support")
+def support():
+    """Support page."""
+    return render_template("support.html")
+
+
 @app.route("/logout")
 def logout():
     session.clear()
@@ -132,7 +138,7 @@ def logout():
         + "/v2/logout?"
         + urlencode(
             {
-                "returnTo": url_for("home", _external=True),
+                "returnTo": url_for("home", _external=True, _scheme="https" if Config.FLASK_ENV == "production" else "http"),
                 "client_id": Config.AUTH0_CLIENT_ID,
             },
             quote_via=quote_plus,
@@ -485,7 +491,7 @@ def generate():
             "text": request.form.get("text", ""),
             "prompt": request.form.get("prompt", ""),
             "quality": request.form.get("quality", "medium"),
-            "size": request.form.get("size", "1024x1024"),
+            "aspect_ratio": request.form.get("aspect_ratio"),
             "gen_type": request.form.get("gen_type", "character"),
         }
 
@@ -495,7 +501,7 @@ def generate():
                 text=form_data["text"],
                 prompt=form_data["prompt"],
                 quality=form_data["quality"], # type: ignore
-                size=form_data["size"], # type: ignore
+                size="1024x1024",  # Deprecated, will be determined by aspect_ratio
             )
         except ValidationError as e:
             for err in e.errors():
@@ -539,7 +545,7 @@ def generate():
                 text=data.text,
                 generation_type=gen_type,
                 quality=data.quality,
-                size=data.size,
+                aspect_ratio=form_data["aspect_ratio"],
                 prompt=data.prompt,
                 reference_image_paths=reference_paths,
                 source="web"
@@ -556,6 +562,7 @@ def generate():
                     "generate.html",
                     generated_image_id=result.generation_id,
                     quality=data.quality,
+                    aspect_ratio=form_data["aspect_ratio"],
                     description=result.refined_description,
                     text=data.text,
                     prompt=data.prompt,
