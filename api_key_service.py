@@ -40,7 +40,7 @@ def create_api_key(user: User, name: str, expires_in_days: Optional[int] = None)
         user=user,
         key_id=key_id,
         key_hash=key_hash,
-        key_prefix=secret[:8],  # Store first 8 chars for user identification
+        key_prefix=key_id[:8],  # Store first 8 chars of key_id for user identification
         name=name,
         expires_at=expires_at,
     )
