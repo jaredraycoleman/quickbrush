@@ -111,15 +111,16 @@ def inject_current_user():
 
 @app.route("/")
 def home():
+    """Homepage - shows the About page for everyone."""
+    current_user = None
     if "user" in session:
-        user = get_current_user()
-        # Check if user has invite access or is admin
-        if user and (user.has_valid_invite or user.is_admin):
-            return redirect(url_for("dashboard"))
-        else:
-            # User is logged in but doesn't have invite - show about page
-            return redirect(url_for("about"))
-    return render_template("login.html")
+        current_user = get_current_user()
+
+    return render_template(
+        "about.html",
+        current_user=current_user,
+        invitation_form_submitted=False
+    )
 
 @app.route("/login")
 def login():
@@ -132,7 +133,10 @@ def callback():
     try:
         token = oauth.auth0.authorize_access_token() # type: ignore
         session["user"] = token
-        return redirect(url_for("dashboard"))
+
+        # Redirect to home (About page) after login
+        # Users with invites can navigate to dashboard from there
+        return redirect(url_for("home"))
     except Exception as e:
         # Log the error for debugging
         import traceback

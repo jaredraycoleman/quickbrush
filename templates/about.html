@@ -17,13 +17,27 @@
             <!-- Main Content -->
             <div class="card shadow-sm mb-4">
                 <div class="card-body p-5">
-                    <h2 class="h3 mb-4">A Message from Wispy Quickbrush</h2>
+                    <div class="row">
+                        <div class="col-md-8">
+                            <h2 class="h3 mb-4">A Message from Wispy Quickbrush</h2>
 
-                    <p class="lead">
-                        "Greetings, fellow creators! I'm <strong>Wispy Quickbrush</strong>, master painter,
-                        artiste extraordinaire, and—dare I say—the most dashing halfling to ever wield a brush
-                        in all the realms!"
-                    </p>
+                            <p class="lead">
+                                "Greetings, fellow creators! I'm <strong>Wispy Quickbrush</strong>, master painter,
+                                artiste extraordinaire, and—dare I say—the most dashing halfling to ever wield a brush
+                                in all the realms!"
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-center">
+                            <img src="{{ url_for('static', filename='images/wispy.webp') }}"
+                                 alt="Wispy Quickbrush - Master Artist"
+                                 class="img-fluid rounded-circle shadow-sm"
+                                 style="max-width: 200px;">
+                            <p class="text-muted mt-2 small">
+                                <em>Wispy Quickbrush</em><br>
+                                Master Artist & Charming Rogue
+                            </p>
+                        </div>
+                    </div>
 
                     <p>
                         For years, I've traveled the land capturing the essence of heroes, villains, dragons,
