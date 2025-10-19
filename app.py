@@ -259,7 +259,7 @@ def dashboard():
         stripe_prices=stripe_prices,
         foundry_module_url=url_for(
             "static",
-            filename="foundry-module/quickbrush.zip",
+            filename="foundry-module/module.json",
             _external=True,
             _scheme="https" if Config.FLASK_ENV == "production" else "http"
         )

@@ -97,6 +97,8 @@ def generate_image(
     if reference_image_paths is None:
         reference_image_paths = []
 
+    print(f"Reference image paths: {reference_image_paths}")
+
     # Determine aspect ratio and size
     if aspect_ratio is None:
         # Default: square for all except scenes which default to landscape

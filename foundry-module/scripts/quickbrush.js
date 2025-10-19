@@ -238,6 +238,42 @@ class QuickbrushDialog extends FormApplication {
     fp.browse();
   }
 
+  /**
+   * Convert image paths to base64 data URIs
+   * This ensures images can be sent over the API without authentication issues
+   */
+  async convertImagesToBase64(imagePaths) {
+    const base64Images = [];
+
+    for (const imagePath of imagePaths) {
+      try {
+        // Fetch the image
+        const response = await fetch(imagePath);
+        if (!response.ok) {
+          console.warn(`Failed to fetch reference image: ${imagePath}`);
+          continue;
+        }
+
+        // Get the blob
+        const blob = await response.blob();
+
+        // Convert to base64
+        const base64 = await new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => resolve(reader.result);
+          reader.onerror = reject;
+          reader.readAsDataURL(blob);
+        });
+
+        base64Images.push(base64);
+      } catch (error) {
+        console.warn(`Error converting image to base64: ${imagePath}`, error);
+      }
+    }
+
+    return base64Images;
+  }
+
   async _updateObject(event, formData) {
     event.preventDefault();
 
@@ -250,14 +286,21 @@ class QuickbrushDialog extends FormApplication {
     const api = new QuickbrushAPI();
 
     try {
-      // Show progress notification (permanent)
-      ui.notifications.info(game.i18n.localize('QUICKBRUSH.Notifications.Generating'), { permanent: true });
-
       // Close the dialog immediately so user can continue working
       this.close();
 
+      // Show single notification that generation has started
+      ui.notifications.info('Generating image... You\'ll be notified when it\'s ready!', { permanent: false });
+
+      // Convert reference images to base64 data URIs
+      // This avoids authentication issues when the API tries to fetch them
+      const referenceImagePaths = this.referenceImages || [];
+      const base64ReferenceImages = referenceImagePaths.length > 0
+        ? await this.convertImagesToBase64(referenceImagePaths)
+        : [];
+
       // Add reference images to formData
-      formData.reference_image_paths = this.referenceImages || [];
+      formData.reference_image_paths = base64ReferenceImages;
 
       // Generate image
       const result = await api.generateImage(formData);
@@ -414,7 +457,7 @@ class QuickbrushGallery {
           — Wispy Quickbrush 🎨✨
         </p>
         <p style="text-align: center; font-size: 0.9em; margin-top: 1.5em;">
-          Quickbrush Module v1.0.1 | <a href="https://quickbrush.online" target="_blank">quickbrush.online</a>
+          Quickbrush Module v1.0.3 | <a href="https://quickbrush.online" target="_blank">quickbrush.online</a>
         </p>
       </div>
     `;
@@ -505,15 +548,18 @@ class QuickbrushGallery {
       .replace('{aspectRatio}', aspectRatio)
       .replace('{imageUrl}', imageUrl);
 
-    // Get first page or create one
-    let page = journal.pages.contents[0];
+    // Get the "Images" page specifically (not the About page)
+    let page = journal.pages.find(p => p.name === 'Images');
+
     if (!page) {
-      page = await journal.createEmbeddedDocuments('JournalEntryPage', [{
+      // Create the Images page
+      const pages = await journal.createEmbeddedDocuments('JournalEntryPage', [{
         name: 'Images',
         type: 'text',
-        text: { content: '' }
+        text: { content: '', format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML },
+        sort: 1 // Sort after the About page
       }]);
-      page = page[0];
+      page = pages[0];
     }
 
     // Prepend new entry to existing content
@@ -522,7 +568,7 @@ class QuickbrushGallery {
       'text.content': entry + currentContent
     });
 
-    ui.notifications.info(game.i18n.localize('QUICKBRUSH.Notifications.GalleryUpdated'));
+    // Don't show notification here - let the caller show a single comprehensive notification
   }
 
   /**
@@ -537,13 +583,16 @@ class QuickbrushGallery {
       const folder = await this.getOrCreateFolder();
       const journal = await this.getOrCreateGalleryJournal();
 
-      // Get first page or create one
-      let page = journal.pages.contents[0];
+      // Get the "Images" page specifically (not the About page)
+      let page = journal.pages.find(p => p.name === 'Images');
+
       if (!page) {
+        // Create the Images page
         const pages = await journal.createEmbeddedDocuments('JournalEntryPage', [{
           name: 'Images',
           type: 'text',
-          text: { content: '', format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML }
+          text: { content: '', format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML },
+          sort: 1 // Sort after the About page
         }]);
         page = pages[0];
       }

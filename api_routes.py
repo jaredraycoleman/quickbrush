@@ -97,6 +97,11 @@ class GenerateImageRequest(BaseModel):
         None,
         description="Aspect ratio (square=1024x1024, landscape=1536x1024, portrait=1024x1536). Defaults to square for most types, landscape for scenes."
     )
+    reference_image_paths: Optional[list[str]] = Field(
+        default=[],
+        description="Optional list of reference image paths/URLs (max 3). Supports URLs, data URIs, or file paths.",
+        max_length=3
+    )
     # Deprecated field - kept for backward compatibility
     size: Optional[Literal["1024x1024", "1536x1024", "1024x1536"]] = Field(
         None,
@@ -110,7 +115,8 @@ class GenerateImageRequest(BaseModel):
                 "prompt": "Fantasy RPG character for my campaign",
                 "generation_type": "character",
                 "quality": "medium",
-                "aspect_ratio": "square"
+                "aspect_ratio": "square",
+                "reference_image_paths": []
             }
         }
 
@@ -249,17 +255,34 @@ async def generate_image(
         }
         aspect_ratio = size_to_aspect.get(request.size)
 
-    # Use shared generation service
-    result = generate_image_shared(
-        user=user,
-        text=request.text,
-        generation_type=request.generation_type,
-        quality=request.quality,
-        aspect_ratio=aspect_ratio,
-        prompt=request.prompt or "",
-        reference_image_paths=[],
-        source="api"
-    )
+    # Process reference images (URLs, base64, etc.) into temp files
+    from image_utils import process_reference_images, cleanup_temp_images
+
+    reference_paths = []
+    if request.reference_image_paths:
+        try:
+            reference_paths = process_reference_images(request.reference_image_paths, max_images=3)
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Error processing reference images: {str(e)}"
+            )
+
+    try:
+        # Use shared generation service
+        result = generate_image_shared(
+            user=user,
+            text=request.text,
+            generation_type=request.generation_type,
+            quality=request.quality,
+            aspect_ratio=aspect_ratio,
+            prompt=request.prompt or "",
+            reference_image_paths=reference_paths,
+            source="api"
+        )
+    finally:
+        # Clean up temporary reference image files
+        cleanup_temp_images(reference_paths)
 
     if not result.success:
         # Determine appropriate status code
