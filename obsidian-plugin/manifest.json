@@ -1,0 +1,10 @@
+{
+	"id": "quickbrush",
+	"name": "QuickBrush",
+	"version": "1.0.0",
+	"minAppVersion": "0.15.0",
+	"description": "Generate AI images for your notes using QuickBrush. Create character portraits, scenes, creatures, and items directly from your Obsidian content.",
+	"author": "QuickBrush",
+	"authorUrl": "https://quickbrush.online",
+	"isDesktopOnly": false
+}

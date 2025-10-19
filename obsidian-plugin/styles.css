@@ -1,0 +1,22 @@
+/* QuickBrush Plugin Styles */
+
+.quickbrush-button-container {
+	display: flex;
+	justify-content: flex-end;
+	gap: 10px;
+	margin-top: 20px;
+}
+
+.quickbrush-modal {
+	min-width: 500px;
+}
+
+.quickbrush-modal .setting-item-description {
+	padding-bottom: 8px;
+}
+
+.quickbrush-modal textarea {
+	width: 100%;
+	font-family: var(--font-monospace);
+	font-size: var(--font-ui-small);
+}
