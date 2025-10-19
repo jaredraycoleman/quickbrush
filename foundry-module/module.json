@@ -1,0 +1,42 @@
+{
+  "id": "quickbrush",
+  "title": "Quickbrush AI Image Generator",
+  "description": "Generate AI-powered fantasy RPG artwork directly in Foundry VTT using Quickbrush. Create characters, scenes, creatures, and items from your journal notes.",
+  "version": "1.0.0",
+  "compatibility": {
+    "minimum": "13.0",
+    "verified": "13.0"
+  },
+  "authors": [
+    {
+      "name": "Quickbrush",
+      "url": "https://quickbrush.online",
+      "email": "support@quickbrush.online"
+    }
+  ],
+  "esmodules": [
+    "scripts/quickbrush.js"
+  ],
+  "styles": [
+    "styles/quickbrush.css"
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "url": "https://quickbrush.online",
+  "manifest": "https://quickbrush.online/foundry-module/module.json",
+  "download": "https://quickbrush.online/foundry-module/quickbrush.zip",
+  "license": "LICENSE",
+  "readme": "README.md",
+  "bugs": "https://github.com/quickbrush/foundry-module/issues",
+  "flags": {
+    "hotReload": {
+      "extensions": ["css", "html", "hbs", "json"],
+      "paths": ["scripts", "styles", "templates", "lang"]
+    }
+  }
+}

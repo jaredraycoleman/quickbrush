@@ -1,0 +1,64 @@
+{
+  "QUICKBRUSH": {
+    "Title": "Quickbrush AI Image Generator",
+    "ButtonLabel": "Generate Image",
+    "JournalButton": "Create with Quickbrush",
+    "Settings": {
+      "ApiKey": {
+        "Name": "API Key",
+        "Hint": "Your Quickbrush API key. Get one at https://quickbrush.online/dashboard"
+      },
+      "ApiUrl": {
+        "Name": "API URL",
+        "Hint": "Quickbrush API endpoint (default: https://quickbrush.online/api)"
+      },
+      "SaveFolder": {
+        "Name": "Image Save Folder",
+        "Hint": "Folder name where generated images will be saved (default: quickbrush-images)"
+      }
+    },
+    "Dialog": {
+      "Title": "Generate Image with Quickbrush",
+      "Description": "Description",
+      "DescriptionPlaceholder": "Describe your subject — Wispy loves detail!",
+      "Prompt": "Artistic Prompt (optional)",
+      "PromptPlaceholder": "e.g., in golden light, wearing a cloak, in a misty forest",
+      "Type": "What do you want to paint?",
+      "Types": {
+        "character": "🎭 Character",
+        "scene": "🌄 Scene",
+        "creature": "🐉 Creature",
+        "item": "🗡️ Item"
+      },
+      "Quality": "Quality",
+      "Qualities": {
+        "low": "Low (1 brushstroke)",
+        "medium": "Medium (3 brushstrokes)",
+        "high": "High (5 brushstrokes)"
+      },
+      "AspectRatio": "Aspect Ratio",
+      "AspectRatios": {
+        "square": "⬜ Square (1024x1024)",
+        "landscape": "🖼️ Landscape (1536x1024)",
+        "portrait": "🖼️ Portrait (1024x1536)"
+      },
+      "Generate": "Generate Image",
+      "Cancel": "Cancel"
+    },
+    "Notifications": {
+      "NoApiKey": "Please set your Quickbrush API key in module settings",
+      "Generating": "Generating image with Quickbrush...",
+      "Success": "Image generated successfully!",
+      "Error": "Failed to generate image: {error}",
+      "Saved": "Image saved to {folder}",
+      "GalleryUpdated": "Quickbrush Gallery updated",
+      "RateLimit": "Rate limit exceeded. Please wait before generating another image.",
+      "InsufficientBrushstrokes": "Insufficient brushstrokes. Visit https://quickbrush.online/dashboard to purchase more."
+    },
+    "Gallery": {
+      "Title": "Quickbrush Gallery",
+      "Description": "This journal contains all images generated with Quickbrush.",
+      "EntryTemplate": "<h2>{type} - {date}</h2><p><strong>Description:</strong> {description}</p><p><strong>Quality:</strong> {quality} | <strong>Aspect Ratio:</strong> {aspectRatio}</p><img src=\"{imageUrl}\" alt=\"{description}\" style=\"max-width: 100%; height: auto;\" /><hr>"
+    }
+  }
+}

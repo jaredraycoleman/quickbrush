@@ -7,15 +7,16 @@ This module provides RESTful API endpoints for:
 - User account information
 """
 
-from fastapi import FastAPI, HTTPException, Depends, Security, status, Header
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi import FastAPI, HTTPException, Depends, status, Header
+from fastapi.security import HTTPBearer
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel, Field, validator
-from typing import Optional, List, Literal
+from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, Field
+from typing import Optional, Literal
 from datetime import datetime
 import logging
 
-from models import User, Generation
+from models import User
 from api_key_service import authenticate_api_key
 from generation_service import generate_image as generate_image_shared
 
@@ -29,6 +30,15 @@ api = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json"
+)
+
+# Add CORS middleware for Foundry VTT integration
+api.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allow all origins for local Foundry VTT installations
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
 # Security

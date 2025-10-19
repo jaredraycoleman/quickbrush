@@ -1,0 +1,52 @@
+<form class="quickbrush-form" autocomplete="off">
+  <div class="form-group">
+    <label for="generation_type">{{localize "QUICKBRUSH.Dialog.Type"}}</label>
+    <select name="generation_type" id="generation_type" class="quickbrush-select">
+      {{#each types}}
+        <option value="{{this.key}}" {{#if (eq ../generation_type this.key)}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+    <p class="notes">Choose what kind of image you're summoning — a portrait, a landscape, a monster, or an artifact!</p>
+  </div>
+
+  <div class="form-group">
+    <label for="text">{{localize "QUICKBRUSH.Dialog.Description"}} <span class="required">*</span></label>
+    <textarea name="text" id="text" rows="3" required placeholder="{{localize 'QUICKBRUSH.Dialog.DescriptionPlaceholder'}}" class="quickbrush-textarea">{{text}}</textarea>
+    <p class="notes">This is the base — what your subject looks like or what the scene contains.</p>
+  </div>
+
+  <div class="form-group">
+    <label for="prompt">{{localize "QUICKBRUSH.Dialog.Prompt"}}</label>
+    <textarea name="prompt" id="prompt" rows="2" placeholder="{{localize 'QUICKBRUSH.Dialog.PromptPlaceholder'}}" class="quickbrush-textarea">{{prompt}}</textarea>
+    <p class="notes">Add mood, pose, or details that shape how Wispy paints.</p>
+  </div>
+
+  <div class="form-group">
+    <label for="quality">{{localize "QUICKBRUSH.Dialog.Quality"}}</label>
+    <select name="quality" id="quality" class="quickbrush-select">
+      {{#each qualities}}
+        <option value="{{this.key}}" {{#if (eq ../quality this.key)}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+    <p class="notes">Higher quality = more detail, more brushstrokes.</p>
+  </div>
+
+  <div class="form-group">
+    <label for="aspect_ratio">{{localize "QUICKBRUSH.Dialog.AspectRatio"}}</label>
+    <select name="aspect_ratio" id="aspect_ratio" class="quickbrush-select">
+      {{#each aspectRatios}}
+        <option value="{{this.key}}" {{#if (eq ../aspect_ratio this.key)}}selected{{/if}}>{{this.label}}</option>
+      {{/each}}
+    </select>
+    <p class="notes">Choose the shape of your canvas. Default: Square for most, Landscape for scenes.</p>
+  </div>
+
+  <footer class="sheet-footer flexrow">
+    <button type="button" class="dialog-button cancel" data-button="cancel">
+      <i class="fas fa-times"></i> {{localize "QUICKBRUSH.Dialog.Cancel"}}
+    </button>
+    <button type="submit" class="dialog-button submit">
+      <i class="fas fa-palette"></i> {{localize "QUICKBRUSH.Dialog.Generate"}}
+    </button>
+  </footer>
+</form>
