@@ -308,7 +308,7 @@ Learn more at [quickbrush.online/dashboard](https://quickbrush.online/dashboard)
 
 ## Changelog
 
-### Version 1.0.0 (2025-10-18)
+### Version 1.0.1 (2025-10-18)
 - Initial release
 - Image generation dialog
 - Journal integration

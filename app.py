@@ -236,7 +236,13 @@ def dashboard():
         total_brushstrokes=user.total_brushstrokes(monthly_allowance),
         purchased_brushstrokes=user.purchased_brushstrokes,
         api_keys=api_keys,
-        stripe_prices=stripe_prices
+        stripe_prices=stripe_prices,
+        foundry_module_url=url_for(
+            "static",
+            filename="foundry-module/quickbrush.zip",
+            _external=True,
+            _scheme="https" if Config.FLASK_ENV == "production" else "http"
+        )
     )
 
 

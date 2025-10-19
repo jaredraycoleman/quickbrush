@@ -1,5 +1,6 @@
 # Generated images
 static/generated/
+static/foundry-module/
 
 # Secrets and deployment configuration
 .env.deploy

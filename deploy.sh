@@ -7,6 +7,11 @@ cd "$(dirname "$0")"
 
 echo "🚀 Starting Quickbrush deployment..."
 
+# Zip foundry-module to static/foundry-module/quickbrush.zip
+echo "📦 Zipping Foundry module..."
+zip -r static/foundry-module/quickbrush.zip foundry-module
+cp foundry-module/module.json static/foundry-module/module.json
+
 # Build and push the Docker image
 echo "📦 Building Docker image..."
 docker compose build --push

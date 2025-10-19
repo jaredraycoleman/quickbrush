@@ -61,6 +61,16 @@
     <p class="notes">Add up to 3 reference images to guide the generation style.</p>
   </div>
 
+  {{#if targetDocument}}
+  <div class="form-group">
+    <label>
+      <input type="checkbox" name="auto_update_image" checked />
+      Automatically update image for "{{targetName}}"
+    </label>
+    <p class="notes">The generated image will automatically be set as the image for this {{targetDocument.documentName}}.</p>
+  </div>
+  {{/if}}
+
   <footer class="sheet-footer flexrow">
     <button type="button" class="dialog-button cancel" data-button="cancel">
       <i class="fas fa-times"></i> {{localize "QUICKBRUSH.Dialog.Cancel"}}

@@ -85,6 +85,18 @@
   color: #c86c36;
 }
 
+/* Context Menu - Make taller to show all items */
+#context-menu {
+  max-height: none !important;
+  height: auto !important;
+}
+
+#context-menu menu.context-items {
+  max-height: none !important;
+  height: auto !important;
+  overflow-y: visible !important;
+}
+
 /* Directory Buttons */
 .quickbrush-directory-btn {
   padding: 0.5rem 1rem;

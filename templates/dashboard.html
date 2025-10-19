@@ -177,6 +177,30 @@
     </div>
   </div>
 
+  
+  <!-- Integrations Section -->
+  <div class="card border-0 shadow-sm mb-4">
+    <div class="card-body">
+      <h5 class="fw-bold">Integrations</h5>
+      <h6 class="fw-bold">Foundry VTT Module</h6>
+      <p class="text-muted mb-3">
+        Enhance your Foundry VTT experience with seamless AI-powered image generation directly within your game.
+      </p>
+
+      <p class="mb-2">
+        Copy this URL and paste it into Foundry VTT's module installation dialog to install the Quickbrush module.
+      </p>
+
+      <div class="input-group mb-3">
+        <input type="text" class="form-control" id="foundryUrl" value="{{ foundry_module_url }}" readonly>
+        <button class="btn btn-outline-secondary" type="button" id="copyFoundryUrl" title="Copy to clipboard">
+          <i class="bi bi-clipboard"></i>
+        </button>
+      </div>
+    </div>
+  </div>
+  
+
   <!-- Action Buttons -->
   <div class="row g-2">
     <div class="col-12 col-sm-6 col-lg-3">
@@ -257,4 +281,29 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block scripts %}
+<script>
+  document.addEventListener('DOMContentLoaded', () => {
+    const copyBtn = document.getElementById('copyFoundryUrl');
+    const urlInput = document.getElementById('foundryUrl');
+
+    if (copyBtn && urlInput) {
+      copyBtn.addEventListener('click', async () => {
+        try {
+          await navigator.clipboard.writeText(urlInput.value);
+          copyBtn.innerHTML = '<i class="bi bi-check2"></i>';
+          copyBtn.classList.add('btn-success');
+          setTimeout(() => {
+            copyBtn.innerHTML = '<i class="bi bi-clipboard"></i>';
+            copyBtn.classList.remove('btn-success');
+          }, 2000);
+        } catch (err) {
+          alert('Failed to copy URL. Please copy it manually.');
+        }
+      });
+    }
+  });
+</script>
 {% endblock %}

@@ -26,7 +26,7 @@ logger = logging.getLogger(__name__)
 api = FastAPI(
     title="Quickbrush API",
     description="API for generating fantasy RPG artwork using AI",
-    version="1.0.0",
+    version="1.0.1",
     docs_url="/docs",
     redoc_url="/redoc",
     openapi_url="/openapi.json"
@@ -83,7 +83,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
 
 class GenerateImageRequest(BaseModel):
     """Request model for image generation."""
-    text: str = Field(..., description="Description of the image to generate", min_length=1, max_length=4000)
+    text: str = Field(..., description="Description of the image to generate", min_length=1, max_length=10_000)
     prompt: Optional[str] = Field(None, description="Additional context or prompt", max_length=500)
     generation_type: Literal["character", "scene", "creature", "item"] = Field(
         default="character",

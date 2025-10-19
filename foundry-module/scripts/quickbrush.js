@@ -139,6 +139,7 @@ class QuickbrushDialog extends FormApplication {
     super({}, options);
     this.data = options.data || {};
     this.referenceImages = options.data?.referenceImages || [];
+    this.targetDocument = options.targetDocument || null; // Actor or Item to update
   }
 
   static get defaultOptions() {
@@ -184,6 +185,8 @@ class QuickbrushDialog extends FormApplication {
       quality: this.data.quality || 'medium',
       aspect_ratio: this.data.aspect_ratio || 'square',
       referenceImages: this.referenceImages,
+      targetDocument: this.targetDocument,
+      targetName: this.targetDocument?.name || null,
       types,
       qualities,
       aspectRatios
@@ -287,11 +290,25 @@ class QuickbrushDialog extends FormApplication {
         refinedDescription: result.refined_description
       });
 
-      // Success! Show permanent notification
-      ui.notifications.info(
-        `Image generated and saved successfully to ${folder}! View it in the Quickbrush Gallery journal.`,
-        { permanent: true }
-      );
+      // Auto-update target document image if requested
+      if (this.targetDocument && formData.auto_update_image) {
+        try {
+          await this.targetDocument.update({ img: uploadResult.path });
+          ui.notifications.info(
+            `Image generated and set as ${this.targetDocument.documentName} image for "${this.targetDocument.name}"!`,
+            { permanent: true }
+          );
+        } catch (err) {
+          console.error('Failed to update document image:', err);
+          ui.notifications.warn(`Image generated but failed to update ${this.targetDocument.documentName} image.`, { permanent: true });
+        }
+      } else {
+        // Success! Show permanent notification
+        ui.notifications.info(
+          `Image generated and saved successfully to ${folder}! View it in the Quickbrush Gallery journal.`,
+          { permanent: true }
+        );
+      }
 
     } catch (error) {
       console.error('Quickbrush generation error:', error);
@@ -308,6 +325,100 @@ class QuickbrushDialog extends FormApplication {
  */
 class QuickbrushGallery {
   static GALLERY_NAME = 'Quickbrush Gallery';
+  static ABOUT_PAGE_NAME = 'About Quickbrush';
+
+  /**
+   * Get the About page content
+   */
+  static getAboutPageContent() {
+    return `
+      <div style="max-width: 800px; margin: 0 auto;">
+        <h1 style="text-align: center; font-size: 2em; margin-bottom: 0.5em;">
+          🎨 Welcome to Quickbrush! 🎨
+        </h1>
+
+        <p style="font-style: italic; font-size: 1.1em;">
+          <strong>Greetings, dear adventurer!</strong>
+        </p>
+        <p>
+          I'm <strong>Wispy Quickbrush</strong>, halfling artist extraordinaire and your magical companion in creating breathtaking artwork for your campaigns! With a flick of my enchanted brush and a sprinkle of arcane artistry, I can bring your characters, creatures, items, and scenes to life faster than a wizard can say "prestidigitation!"
+        </p>
+        <p>
+          Whether you need a portrait of a noble paladin, a fearsome dragon, or a mysterious magical artifact, I'm here to help paint your imagination onto the canvas of reality. Well... digital reality, at least! 🖌️✨
+        </p>
+
+        <h2>📖 How to Use Quickbrush</h2>
+
+        <h3>🔑 First Things First: Setting Up Your API Key</h3>
+        <ol>
+          <li>Visit <a href="https://quickbrush.online" target="_blank">quickbrush.online</a> and create an account</li>
+          <li>Copy your API key from your account dashboard</li>
+          <li>In Foundry VTT, go to <strong>Settings</strong> → <strong>Configure Settings</strong> → <strong>Module Settings</strong></li>
+          <li>Find <strong>Quickbrush</strong> and paste your API key in the <strong>API Key</strong> field</li>
+          <li>Click <strong>Save Changes</strong> and you're ready to create!</li>
+        </ol>
+
+        <h3>🎭 Generating Images</h3>
+        <p>Quickbrush integrates seamlessly throughout Foundry VTT! You can generate images from:</p>
+
+        <h4>📓 Journal Pages</h4>
+        <p>Open any journal page, click the <strong>⋮</strong> (controls) button, and select one of the Quickbrush options (Character, Scene, Creature, or Item). I'll automatically extract the text from your journal to use as a description!</p>
+
+        <h4>👤 Character Sheets</h4>
+        <p>Open any character or NPC sheet, click the <strong>⋮</strong> button, and select <strong>Quickbrush</strong>. I'll extract their name, race, class, description, and more to create the perfect portrait!</p>
+
+        <h4>🗡️ Item Sheets</h4>
+        <p>Open any item sheet, click the <strong>⋮</strong> button, and select <strong>Quickbrush</strong>. I'll use the item's name, type, rarity, and description to paint it for you!</p>
+
+        <h4>📚 Journal Directory</h4>
+        <p>Click the <strong>🎨 Quickbrush</strong> button in the Journal tab to open the generation dialog from anywhere!</p>
+
+        <h3>🖼️ Generation Options</h3>
+        <ul>
+          <li><strong>Generation Type:</strong> Choose Character, Scene, Creature, or Item to guide my artistic style</li>
+          <li><strong>Description:</strong> Tell me what you want painted! The more details, the better</li>
+          <li><strong>Prompt (Optional):</strong> Add mood, lighting, pose, or artistic direction</li>
+          <li><strong>Quality:</strong> Low (fast & cheap), Medium (balanced), or High (detailed & beautiful)</li>
+          <li><strong>Aspect Ratio:</strong> Square, Landscape, or Portrait</li>
+          <li><strong>Reference Images:</strong> Upload up to 3 reference images to guide the style</li>
+          <li><strong>Auto-Update:</strong> When generating from a character/item sheet, check this to automatically set the image</li>
+        </ul>
+
+        <h3>📸 Your Gallery</h3>
+        <p>All your generated images are automatically saved to this journal's <strong>Images</strong> page! You can browse your artistic collection, copy images to use elsewhere, or just admire my handiwork. 😊</p>
+
+        <p>Use the <strong>🔄 Quickbrush Sync</strong> button in the Journal tab to sync your online library with Foundry!</p>
+
+        <h2>⚠️ Important Information</h2>
+
+        <h3>🤖 AI-Powered Art</h3>
+        <p>Quickbrush uses artificial intelligence to generate images based on your descriptions. While I do my best to create exactly what you envision, AI-generated art can sometimes be... creative! You might occasionally get unexpected results, unusual anatomy, or mysterious extra fingers. That's just part of the magical chaos! 🎲</p>
+
+        <p><strong>Please note:</strong> Generated images are subject to the content policies of our AI provider. Keep your prompts family-friendly and in line with the heroic spirit of adventure!</p>
+
+        <h3>💎 Brushstrokes & Pricing</h3>
+        <p>Each generation consumes <strong>brushstrokes</strong> from your Quickbrush account:</p>
+        <ul>
+          <li><strong>Low Quality:</strong> Fewer brushstrokes, faster generation</li>
+          <li><strong>Medium Quality:</strong> Balanced cost and quality</li>
+          <li><strong>High Quality:</strong> More brushstrokes, stunning detail</li>
+        </ul>
+        <p>Check your brushstrokes balance at <a href="https://quickbrush.online" target="_blank">quickbrush.online</a>!</p>
+
+        <hr style="margin: 2em 0;">
+
+        <p style="text-align: center; font-style: italic;">
+          <strong>Happy adventuring, and may your campaigns be filled with beautiful art!</strong>
+        </p>
+        <p style="text-align: center;">
+          — Wispy Quickbrush 🎨✨
+        </p>
+        <p style="text-align: center; font-size: 0.9em; margin-top: 1.5em;">
+          Quickbrush Module v1.0.1 | <a href="https://quickbrush.online" target="_blank">quickbrush.online</a>
+        </p>
+      </div>
+    `;
+  }
 
   /**
    * Get or create the quickbrush-images folder
@@ -335,12 +446,47 @@ class QuickbrushGallery {
 
     if (!journal) {
       journal = await JournalEntry.create({
-        name: this.GALLERY_NAME,
-        content: `<h1>${game.i18n.localize('QUICKBRUSH.Gallery.Title')}</h1><p>${game.i18n.localize('QUICKBRUSH.Gallery.Description')}</p><hr>`
+        name: this.GALLERY_NAME
       });
     }
 
+    // Ensure About page exists
+    await this.ensureAboutPage(journal);
+
     return journal;
+  }
+
+  /**
+   * Ensure the About page exists in the gallery
+   */
+  static async ensureAboutPage(journal) {
+    // Check if About page already exists
+    let aboutPage = journal.pages.find(p => p.name === this.ABOUT_PAGE_NAME);
+
+    console.log('Quickbrush | Ensuring About page exists:', aboutPage ? 'found' : 'not found');
+
+    if (!aboutPage) {
+      // Create the About page
+      const pages = await journal.createEmbeddedDocuments('JournalEntryPage', [{
+        name: this.ABOUT_PAGE_NAME,
+        type: 'text',
+        text: {
+          content: this.getAboutPageContent(),
+          format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML
+        },
+        sort: 0 // Make it the first page
+      }]);
+      aboutPage = pages[0];
+      console.log('Quickbrush | Created About page');
+    } else {
+      // Update existing About page content (in case we've updated the text)
+      await aboutPage.update({
+        'text.content': this.getAboutPageContent()
+      });
+      console.log('Quickbrush | Updated About page');
+    }
+
+    return aboutPage;
   }
 
   /**
@@ -358,8 +504,6 @@ class QuickbrushGallery {
       .replace('{quality}', quality.charAt(0).toUpperCase() + quality.slice(1))
       .replace('{aspectRatio}', aspectRatio)
       .replace('{imageUrl}', imageUrl);
-
-    console.log(journal);
 
     // Get first page or create one
     let page = journal.pages.contents[0];
@@ -501,7 +645,6 @@ function extractVisibleJournalText(html) {
     textContent = textContent.substring(0, 4000).trim();
   }
 
-  console.log('Quickbrush | Extracted text length:', textContent.length);
   return textContent;
 }
 
@@ -538,10 +681,44 @@ Hooks.once('init', () => {
     type: String,
     default: 'quickbrush-images'
   });
+
+  // Register a hidden setting to track if we've shown the About page
+  game.settings.register(MODULE_ID, 'aboutPageShown', {
+    scope: 'world',
+    config: false,
+    type: Boolean,
+    default: false
+  });
 });
 
-Hooks.once('ready', () => {
+Hooks.once('ready', async () => {
   console.log('Quickbrush | Module ready');
+
+  // Show the About page on first launch (only for GMs)
+  if (game.user.isGM) {
+    const aboutPageShown = game.settings.get(MODULE_ID, 'aboutPageShown');
+
+    if (!aboutPageShown) {
+      console.log('Quickbrush | First launch detected, showing About page');
+
+      // Create/get the gallery journal
+      const journal = await QuickbrushGallery.getOrCreateGalleryJournal();
+
+      // Get the About page
+      const aboutPage = journal.pages.find(p => p.name === QuickbrushGallery.ABOUT_PAGE_NAME);
+
+      if (aboutPage) {
+        // Show the journal with the About page
+        journal.sheet.render(true, { pageId: aboutPage.id });
+
+        // Mark that we've shown the About page
+        await game.settings.set(MODULE_ID, 'aboutPageShown', true);
+
+        // Show a friendly notification
+        ui.notifications.info('Welcome to Quickbrush! 🎨 Check out the About page to get started!', { permanent: true });
+      }
+    }
+  }
 });
 
 /**
@@ -647,6 +824,476 @@ Hooks.on('renderJournalDirectory', (app, html) => {
   });
 
   $html.find('.directory-header .header-actions').append(buttons);
+});
+
+/**
+ * Strip HTML tags and clean text
+ */
+function stripHTML(html) {
+  if (!html) return '';
+
+  // Create a temporary div to parse HTML
+  const temp = document.createElement('div');
+  temp.innerHTML = html;
+
+  // Get text content
+  const text = temp.textContent || temp.innerText || '';
+
+  // Clean up whitespace
+  return text.replace(/\s+/g, ' ').trim();
+}
+
+/**
+ * Resolve Foundry @Embed tags and enrich text
+ */
+async function enrichAndStripText(text) {
+  if (!text) return '';
+
+  try {
+    // Use Foundry's TextEditor to enrich the text (resolves @Embed, @UUID, etc.)
+    const enriched = await TextEditor.enrichHTML(text, {
+      async: true,
+      secrets: false,
+      documents: true,
+      links: true,
+      rolls: false,
+      rollData: {}
+    });
+
+    // Strip HTML tags from the enriched content
+    return stripHTML(enriched);
+  } catch (err) {
+    console.warn('Quickbrush | Failed to enrich text, using fallback:', err);
+    // Fallback: just strip @Embed tags manually and clean HTML
+    const withoutEmbeds = text.replace(/@Embed\[[^\]]+\]/g, '');
+    return stripHTML(withoutEmbeds);
+  }
+}
+
+/**
+ * Extract rich text description from actor with metadata
+ */
+async function extractActorText(actor, actorType) {
+  let parts = [];
+
+  // Add name
+  parts.push(`Name: ${actor.name}`);
+
+  if (actorType === 'character') {
+    // Character-specific metadata
+    if (actor.system.details?.race?.name) {
+      parts.push(`Race: ${actor.system.details.race.name}`);
+    }
+
+    // Class and level
+    const classes = [];
+    if (actor.items) {
+      actor.items.forEach(item => {
+        if (item.type === 'class') {
+          const level = item.system.levels || 1;
+          classes.push(`${item.name} ${level}`);
+        }
+      });
+    }
+    if (classes.length > 0) {
+      parts.push(`Class: ${classes.join(', ')}`);
+    }
+
+    // Background
+    if (actor.system.details?.background?.name) {
+      parts.push(`Background: ${actor.system.details.background.name}`);
+    }
+
+    // Alignment
+    if (actor.system.details?.alignment) {
+      parts.push(`Alignment: ${actor.system.details.alignment}`);
+    }
+
+  } else {
+    // NPC/Creature metadata
+    if (actor.system.details?.type?.value) {
+      parts.push(`Type: ${actor.system.details.type.value}`);
+    }
+
+    // Size
+    if (actor.system.traits?.size) {
+      parts.push(`Size: ${actor.system.traits.size}`);
+    }
+
+    // CR
+    if (actor.system.details?.cr !== undefined) {
+      parts.push(`CR: ${actor.system.details.cr}`);
+    }
+
+    // Alignment
+    if (actor.system.details?.alignment) {
+      parts.push(`Alignment: ${actor.system.details.alignment}`);
+    }
+  }
+
+  // Add biography/description
+  let description = '';
+  if (actor.system.details?.biography?.value) {
+    description = actor.system.details.biography.value;
+  } else if (actor.system.biography?.value) {
+    description = actor.system.biography.value;
+  } else if (actor.system.description?.value) {
+    description = actor.system.description.value;
+  }
+
+  if (description) {
+    // Enrich and strip HTML tags from description
+    const stripped = await enrichAndStripText(description);
+    if (stripped) {
+      parts.push(`\nDescription: ${stripped}`);
+    }
+  }
+
+  return parts.join('\n');
+}
+
+/**
+ * Extract rich text description from item with metadata
+ */
+async function extractItemText(item) {
+  let parts = [];
+
+  // Add name
+  parts.push(`Name: ${item.name}`);
+
+  // Item type
+  if (item.type) {
+    parts.push(`Type: ${item.type.charAt(0).toUpperCase() + item.type.slice(1)}`);
+  }
+
+  // Rarity
+  if (item.system.rarity) {
+    parts.push(`Rarity: ${item.system.rarity.charAt(0).toUpperCase() + item.system.rarity.slice(1)}`);
+  }
+
+  // Value
+  if (item.system.price?.value) {
+    const currency = item.system.price.denomination || 'gp';
+    parts.push(`Value: ${item.system.price.value} ${currency}`);
+  }
+
+  // Weight
+  if (item.system.weight?.value) {
+    parts.push(`Weight: ${item.system.weight.value} lbs`);
+  }
+
+  // Properties (for weapons/armor)
+  if (item.system.properties) {
+    const props = [];
+    for (const [key, enabled] of Object.entries(item.system.properties)) {
+      if (enabled) props.push(key);
+    }
+    if (props.length > 0) {
+      parts.push(`Properties: ${props.join(', ')}`);
+    }
+  }
+
+  // Damage (for weapons)
+  if (item.system.damage?.parts && item.system.damage.parts.length > 0) {
+    const damageStr = item.system.damage.parts.map(p => `${p[0]} ${p[1]}`).join(', ');
+    parts.push(`Damage: ${damageStr}`);
+  }
+
+  // AC (for armor)
+  if (item.system.armor?.value) {
+    parts.push(`AC: ${item.system.armor.value}`);
+  }
+
+  // Description
+  let description = '';
+  if (item.system.description?.value) {
+    description = item.system.description.value;
+  } else if (item.system.details?.description?.value) {
+    description = item.system.details.description.value;
+  }
+
+  if (description) {
+    // Enrich and strip HTML tags from description
+    const stripped = await enrichAndStripText(description);
+    if (stripped) {
+      parts.push(`\nDescription: ${stripped}`);
+    }
+  }
+
+  return parts.join('\n');
+}
+
+/**
+ * Helper function to add Quickbrush to actor sheet
+ */
+function addQuickbrushToActorSheet(app, html, actorType) {
+  console.log(`Quickbrush | Rendering ${actorType} actor sheet`);
+  if (!game.user.isGM) return;
+
+  const $html = html instanceof jQuery ? html : $(html);
+
+  // Try both selectors
+  let $menu = $html.find('menu.controls-dropdown');
+  if ($menu.length === 0) {
+    $menu = $html.find('menu.context-menu');
+  }
+
+  console.log('Quickbrush | Menu found:', $menu.length > 0, 'HTML classes:', $menu.attr('class'));
+
+  if ($menu.length === 0) return;
+
+  // Get the actor document
+  const actor = app.document || app.actor || app.object;
+  if (!actor) {
+    console.warn('Quickbrush | Could not find actor document');
+    return;
+  }
+
+  // Check if already added to prevent duplicates
+  if ($menu.find('[data-action="quickbrush-actor"]').length > 0) {
+    console.log('Quickbrush | Already added, skipping');
+    return;
+  }
+
+  const isCharacter = actorType === 'character';
+  const generationType = isCharacter ? 'character' : 'creature';
+  const label = isCharacter ? '🎭 Character' : '🐉 Creature';
+  const icon = isCharacter ? 'fa-user' : 'fa-dragon';
+
+  const menuItem = $(`
+    <li class="header-control" data-action="quickbrush-actor">
+      <button type="button" class="control">
+        <i class="control-icon fa-fw fa-solid ${icon}"></i>
+        <span class="control-label">Quickbrush: ${label}</span>
+      </button>
+    </li>
+  `);
+
+  menuItem.find('button').on('click', () => {
+    console.log('Quickbrush | Generate button clicked for actor:', actor.name);
+
+    // Extract actor description/biography
+    let textContent = actor.name;
+
+    // Try to get biography/description from system data
+    if (actor.system.details?.biography?.value) {
+      textContent = actor.system.details.biography.value;
+    } else if (actor.system.biography?.value) {
+      textContent = actor.system.biography.value;
+    } else if (actor.system.description?.value) {
+      textContent = actor.system.description.value;
+    }
+
+    // Extract images from actor's img property
+    const referenceImages = [];
+    if (actor.img && !actor.img.includes('mystery-man')) {
+      referenceImages.push(actor.img);
+    }
+
+    console.log('Quickbrush | Opening dialog for actor:', actor.name);
+    console.log('Quickbrush | Text length:', textContent.length);
+    console.log('Quickbrush | Reference images:', referenceImages.length);
+
+    new QuickbrushDialog({
+      targetDocument: actor,
+      data: {
+        text: textContent,
+        generation_type: generationType,
+        aspect_ratio: 'square',
+        referenceImages
+      }
+    }).render(true);
+  });
+
+  $menu.append(menuItem);
+  console.log('Quickbrush | Menu item appended to', $menu.attr('class'));
+
+  // Listen for the toggle button click to add to the dynamically created context menu
+  const $toggleButton = $html.find('button[data-action="toggleControls"]');
+  if ($toggleButton.length > 0) {
+    console.log('Quickbrush | Found toggle button, adding click listener');
+
+    $toggleButton.on('click', () => {
+      console.log('Quickbrush | Toggle button clicked');
+
+      // Wait for the context menu to be created
+      setTimeout(() => {
+        const $contextMenu = $('#context-menu');
+        console.log('Quickbrush | Context menu found:', $contextMenu.length > 0);
+
+        if ($contextMenu.length > 0) {
+          const $contextItems = $contextMenu.find('menu.context-items');
+          console.log('Quickbrush | Context items container found:', $contextItems.length > 0);
+
+          // Check if already added
+          if ($contextItems.find('.quickbrush-context-item').length === 0) {
+            console.log('Quickbrush | Adding to context menu');
+
+            const contextItem = $(`
+              <li class="context-item quickbrush-context-item">
+                <i class="fa-solid ${icon} fa-fw" inert=""></i>
+                <span>Quickbrush: ${label}</span>
+              </li>
+            `);
+
+            contextItem.on('click', async () => {
+              console.log('Quickbrush | Context menu item clicked');
+              // Close the context menu
+              $contextMenu[0]?.hidePopover?.();
+
+              // Extract rich text content with metadata
+              const textContent = await extractActorText(actor, actorType);
+
+              // Extract images from actor's img property
+              const referenceImages = [];
+              if (actor.img && !actor.img.includes('mystery-man')) {
+                referenceImages.push(actor.img);
+              }
+
+              console.log('Quickbrush | Opening dialog for actor:', actor.name);
+              console.log('Quickbrush | Extracted text:', textContent.substring(0, 200) + '...');
+
+              new QuickbrushDialog({
+                targetDocument: actor,
+                data: {
+                  text: textContent,
+                  generation_type: generationType,
+                  aspect_ratio: 'square',
+                  referenceImages
+                }
+              }).render(true);
+            });
+
+            $contextItems.append(contextItem);
+            console.log('Quickbrush | Added to context menu');
+
+            // Force the context menu to recalculate its height
+            const contextMenuElement = $contextMenu[0];
+            if (contextMenuElement) {
+              // Remove any max-height constraints that might have been set
+              $contextMenu.css('max-height', 'none');
+              $contextItems.css('max-height', 'none');
+
+              // Force a reflow
+              contextMenuElement.style.height = 'auto';
+
+              console.log('Quickbrush | Context menu height adjusted');
+            }
+          } else {
+            console.log('Quickbrush | Already in context menu');
+          }
+        }
+      }, 50);
+    });
+  }
+}
+
+/**
+ * Add Quickbrush options to Character Actor sheet controls dropdown
+ */
+Hooks.on('renderCharacterActorSheet', (app, html) => {
+  addQuickbrushToActorSheet(app, html, 'character');
+});
+
+/**
+ * Add Quickbrush options to NPC Actor sheet controls dropdown
+ */
+Hooks.on('renderNPCActorSheet', (app, html) => {
+  addQuickbrushToActorSheet(app, html, 'npc');
+});
+
+/**
+ * Add Quickbrush options to Item sheet controls dropdown
+ */
+Hooks.on('renderItemSheet5e', (app, html) => {
+  console.log('Quickbrush | Rendering item sheet');
+  if (!game.user.isGM) return;
+
+  const $html = html instanceof jQuery ? html : $(html);
+
+  const item = app.document || app.item || app.object;
+  if (!item) {
+    console.warn('Quickbrush | Could not find item document');
+    return;
+  }
+
+  // Listen for the toggle button click to add to the dynamically created context menu
+  const $toggleButton = $html.find('button[data-action="toggleControls"]');
+  if ($toggleButton.length > 0) {
+    console.log('Quickbrush | Found item toggle button, adding click listener');
+
+    $toggleButton.on('click', () => {
+      console.log('Quickbrush | Item toggle button clicked');
+
+      // Wait for the context menu to be created
+      setTimeout(() => {
+        const $contextMenu = $('#context-menu');
+        console.log('Quickbrush | Item context menu found:', $contextMenu.length > 0);
+
+        if ($contextMenu.length > 0) {
+          const $contextItems = $contextMenu.find('menu.context-items');
+
+          // Check if already added
+          if ($contextItems.find('.quickbrush-context-item').length === 0) {
+            console.log('Quickbrush | Adding to item context menu');
+
+            const contextItem = $(`
+              <li class="context-item quickbrush-context-item">
+                <i class="fa-solid fa-gem fa-fw" inert=""></i>
+                <span>Quickbrush: 🗡️ Item</span>
+              </li>
+            `);
+
+            contextItem.on('click', async () => {
+              console.log('Quickbrush | Item context menu item clicked');
+              // Close the context menu
+              $contextMenu[0]?.hidePopover?.();
+
+              // Extract rich text content with metadata
+              const textContent = await extractItemText(item);
+
+              // Extract images from item's img property
+              const referenceImages = [];
+              if (item.img && !item.img.includes('mystery-man')) {
+                referenceImages.push(item.img);
+              }
+
+              console.log('Quickbrush | Opening dialog for item:', item.name);
+              console.log('Quickbrush | Extracted text:', textContent.substring(0, 200) + '...');
+
+              new QuickbrushDialog({
+                targetDocument: item,
+                data: {
+                  text: textContent,
+                  generation_type: 'item',
+                  aspect_ratio: 'square',
+                  referenceImages
+                }
+              }).render(true);
+            });
+
+            $contextItems.append(contextItem);
+            console.log('Quickbrush | Added to item context menu');
+
+            // Force the context menu to recalculate its height
+            const contextMenuElement = $contextMenu[0];
+            if (contextMenuElement) {
+              // Remove any max-height constraints that might have been set
+              $contextMenu.css('max-height', 'none');
+              $contextItems.css('max-height', 'none');
+
+              // Force a reflow
+              contextMenuElement.style.height = 'auto';
+
+              console.log('Quickbrush | Item context menu height adjusted');
+            }
+          } else {
+            console.log('Quickbrush | Already in item context menu');
+          }
+        }
+      }, 50);
+    });
+  }
 });
 
 // Export for console access
