@@ -1,0 +1,221 @@
+{% extends "base.html" %}
+
+{% block title %}About - Quickbrush{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-lg-10">
+            <!-- Hero Section -->
+            <div class="text-center mb-5">
+                <h1 class="display-4 fw-bold mb-3">
+                    <i class="bi bi-brush-fill text-primary"></i> Quickbrush
+                </h1>
+                <p class="lead text-muted">Where Wispy Quickbrush's artistic genius meets AI magic!</p>
+            </div>
+
+            <!-- Main Content -->
+            <div class="card shadow-sm mb-4">
+                <div class="card-body p-5">
+                    <h2 class="h3 mb-4">A Message from Wispy Quickbrush</h2>
+
+                    <p class="lead">
+                        "Greetings, fellow creators! I'm <strong>Wispy Quickbrush</strong>, master painter,
+                        artiste extraordinaire, and—dare I say—the most dashing halfling to ever wield a brush
+                        in all the realms!"
+                    </p>
+
+                    <p>
+                        For years, I've traveled the land capturing the essence of heroes, villains, dragons,
+                        and the occasional confused goblin who wandered into my studio. But let's be honest—
+                        <em>genius takes time</em>, and not everyone can afford to commission a Wispy Quickbrush
+                        original (though you should, they're magnificent).
+                    </p>
+
+                    <p>
+                        That's why I've partnered with some rather clever artificers to create <strong>Quickbrush</strong>—
+                        a magical tool that channels my artistic vision through the power of... well, I'm told it's
+                        "artificial intelligence," but between you and me, I suspect it's powered by a very tiny,
+                        very talented art sprite trapped in a crystal. Don't tell the authorities.
+                    </p>
+
+                    <hr class="my-4">
+
+                    <h2 class="h3 mb-4">What Is Quickbrush?</h2>
+
+                    <p>
+                        <strong>Quickbrush</strong> is your personal art studio in the cloud! Whether you're a
+                        Dungeon Master crafting the perfect scene, a player visualizing your character, or just
+                        someone who needs a picture of a disgruntled owlbear RIGHT NOW—we've got you covered.
+                    </p>
+
+                    <div class="row g-4 my-4">
+                        <div class="col-md-6">
+                            <div class="card h-100 border-primary">
+                                <div class="card-body">
+                                    <h3 class="h5 card-title">
+                                        <i class="bi bi-person-circle text-primary"></i> Characters
+                                    </h3>
+                                    <p class="card-text">
+                                        Bring your heroes and villains to life! From noble paladins to
+                                        questionable warlocks with suspiciously glowing eyes.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card h-100 border-success">
+                                <div class="card-body">
+                                    <h3 class="h5 card-title">
+                                        <i class="bi bi-image text-success"></i> Scenes
+                                    </h3>
+                                    <p class="card-text">
+                                        Craft breathtaking environments! Taverns, dungeons, mystical forests,
+                                        or that one cursed cave your party refuses to explore.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card h-100 border-danger">
+                                <div class="card-body">
+                                    <h3 class="h5 card-title">
+                                        <i class="bi bi-stars text-danger"></i> Creatures
+                                    </h3>
+                                    <p class="card-text">
+                                        Summon beasts, monsters, and things that go bump in the night!
+                                        (Artist not responsible for nightmares.)
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="col-md-6">
+                            <div class="card h-100 border-warning">
+                                <div class="card-body">
+                                    <h3 class="h5 card-title">
+                                        <i class="bi bi-gem text-warning"></i> Items
+                                    </h3>
+                                    <p class="card-text">
+                                        Legendary swords, mysterious potions, cursed amulets, and that
+                                        stick the bard insists is "actually really important."
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr class="my-4">
+
+                    <h2 class="h3 mb-4">How Does It Work?</h2>
+
+                    <div class="alert alert-info">
+                        <p class="mb-2">
+                            <strong><i class="bi bi-brush"></i> Brushstrokes</strong> are our currency of creativity!
+                        </p>
+                        <ul class="mb-0">
+                            <li><strong>Low Quality</strong> (1 brushstroke) - Quick sketches, perfect for NPCs</li>
+                            <li><strong>Medium Quality</strong> (3 brushstrokes) - Detailed art for your adventures</li>
+                            <li><strong>High Quality</strong> (5 brushstrokes) - Museum-worthy masterpieces!</li>
+                        </ul>
+                    </div>
+
+                    <p>
+                        Simply describe what you want to see, choose your quality level, and let the magic—er,
+                        I mean, <em>technology</em>—do the rest! In moments, you'll have a unique piece of art
+                        worthy of any campaign.
+                    </p>
+
+                    {% if session.user %}
+                        {% if current_user and current_user.has_valid_invite %}
+                            <div class="text-center my-4">
+                                <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">
+                                    <i class="bi bi-palette-fill"></i> Start Creating
+                                </a>
+                            </div>
+                        {% else %}
+                            <div class="alert alert-warning text-center">
+                                <h4 class="alert-heading">
+                                    <i class="bi bi-envelope-fill"></i> Invitation Required
+                                </h4>
+                                <p>
+                                    Quickbrush is currently in exclusive access mode. You'll need an invitation
+                                    code to start creating art.
+                                </p>
+                                {% if not invitation_form_submitted %}
+                                <form method="POST" action="{{ url_for('redeem_invite') }}" class="mt-3">
+                                    <div class="row justify-content-center">
+                                        <div class="col-md-6">
+                                            <div class="input-group">
+                                                <input type="text"
+                                                       class="form-control"
+                                                       name="invitation_code"
+                                                       placeholder="Enter your invitation code"
+                                                       required>
+                                                <button type="submit" class="btn btn-success">
+                                                    <i class="bi bi-check-circle"></i> Redeem
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </form>
+                                {% endif %}
+                                <p class="mt-3 mb-0 text-muted">
+                                    Contact an administrator to request an invitation code.
+                                </p>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <div class="text-center my-4">
+                            <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">
+                                <i class="bi bi-box-arrow-in-right"></i> Sign In to Get Started
+                            </a>
+                        </div>
+                    {% endif %}
+
+                    <hr class="my-4">
+
+                    <h2 class="h3 mb-4">The Fine Print (But Make It Fancy)</h2>
+
+                    <p>
+                        While I, Wispy Quickbrush, would <em>love</em> to claim full credit for every piece
+                        generated by this tool, I must confess that Quickbrush uses state-of-the-art AI image
+                        generation technology. Think of it as my artistic vision, automated for your convenience!
+                    </p>
+
+                    <p>
+                        <strong>Perfect for:</strong>
+                    </p>
+                    <ul>
+                        <li>Tabletop RPG players and Dungeon Masters</li>
+                        <li>Virtual Tabletop enthusiasts (VTT players)</li>
+                        <li>Fantasy writers seeking visual inspiration</li>
+                        <li>Anyone who's ever thought, "I wish I could draw this"</li>
+                    </ul>
+
+                    <p class="text-muted mt-4">
+                        <em>
+                            "Remember, art is subjective, but my taste is impeccable. Now go forth and create
+                            something magnificent!"
+                        </em>
+                    </p>
+                    <p class="text-end text-muted mb-0">
+                        — Wispy Quickbrush, Master Artist & Charming Rogue
+                    </p>
+                </div>
+            </div>
+
+            <!-- Footer Info -->
+            <div class="text-center text-muted mb-5">
+                <p>
+                    <a href="{{ url_for('privacy') }}" class="text-decoration-none">Privacy Policy</a> •
+                    <a href="{{ url_for('terms') }}" class="text-decoration-none">Terms & Conditions</a> •
+                    <a href="{{ url_for('support') }}" class="text-decoration-none">Support</a>
+                </p>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -21,11 +21,59 @@
   <nav class="navbar navbar-expand-lg navbar-dark">
     <div class="container">
       <a class="navbar-brand" href="/">
-        Quickbrush
+        <i class="bi bi-brush-fill"></i> Quickbrush
       </a>
-      {% if session.user %}
-        <a href="{{ url_for('logout') }}" class="btn btn-outline-light">Logout</a>
-      {% endif %}
+      <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+        <span class="navbar-toggler-icon"></span>
+      </button>
+      <div class="collapse navbar-collapse" id="navbarNav">
+        <ul class="navbar-nav me-auto">
+          <li class="nav-item">
+            <a class="nav-link" href="{{ url_for('about') }}">
+              <i class="bi bi-info-circle"></i> About
+            </a>
+          </li>
+          {% if current_user and (current_user.has_valid_invite or current_user.is_admin) %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('dashboard') }}">
+                <i class="bi bi-speedometer2"></i> Dashboard
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('generate') }}">
+                <i class="bi bi-palette-fill"></i> Generate
+              </a>
+            </li>
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('library') }}">
+                <i class="bi bi-images"></i> Library
+              </a>
+            </li>
+            {% if current_user.is_admin %}
+              <li class="nav-item">
+                <a class="nav-link text-warning" href="{{ url_for('admin_panel') }}">
+                  <i class="bi bi-shield-lock-fill"></i> Admin
+                </a>
+              </li>
+            {% endif %}
+          {% endif %}
+        </ul>
+        <ul class="navbar-nav">
+          {% if session.user %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('logout') }}">
+                <i class="bi bi-box-arrow-right"></i> Logout
+              </a>
+            </li>
+          {% else %}
+            <li class="nav-item">
+              <a class="nav-link" href="{{ url_for('login') }}">
+                <i class="bi bi-box-arrow-in-right"></i> Sign In
+              </a>
+            </li>
+          {% endif %}
+        </ul>
+      </div>
     </div>
   </nav>
   <div class="container mt-4 mb-5">

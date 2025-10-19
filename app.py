@@ -15,9 +15,9 @@ from flask import (
 from dotenv import find_dotenv, load_dotenv
 
 from config import Config
-from auth import oauth, login_required
+from auth import oauth, login_required, admin_required, invite_required
 from database import init_db
-from models import get_or_create_user, User
+from models import get_or_create_user, User, get_user_by_auth0_sub, InvitationCode
 from maker import QUALITY, IMAGE_SIZE
 from stripe_utils import (
     create_portal_session,
@@ -97,13 +97,28 @@ def get_current_user() -> Optional[User]:
     return user
 
 # ---------------------------------------------------------
+# Template Context Processor
+# ---------------------------------------------------------
+
+@app.context_processor
+def inject_current_user():
+    """Make current_user available in all templates."""
+    return dict(current_user=get_current_user() if "user" in session else None)
+
+# ---------------------------------------------------------
 # Routes
 # ---------------------------------------------------------
 
 @app.route("/")
 def home():
     if "user" in session:
-        return redirect(url_for("dashboard"))
+        user = get_current_user()
+        # Check if user has invite access or is admin
+        if user and (user.has_valid_invite or user.is_admin):
+            return redirect(url_for("dashboard"))
+        else:
+            # User is logged in but doesn't have invite - show about page
+            return redirect(url_for("about"))
     return render_template("login.html")
 
 @app.route("/login")
@@ -170,6 +185,7 @@ def logout():
 
 @app.route("/dashboard")
 @login_required
+@invite_required
 def dashboard():
     user = get_current_user()
     if not user:
@@ -508,6 +524,7 @@ class GenerateRequest(BaseModel):
 
 @app.route("/generate", methods=["GET", "POST"])
 @login_required
+@invite_required
 def generate():
     if request.method == "POST":
         user = get_current_user()
@@ -642,6 +659,7 @@ def serve_image(generation_id: str):
 
 @app.route("/library")
 @login_required
+@invite_required
 def library():
     """View user's generation library."""
     user = get_current_user()
@@ -662,6 +680,255 @@ def library():
         remaining_slots=remaining_slots,
         max_images=100
     )
+
+
+# ---------------------------------------------------------
+# ABOUT PAGE
+# ---------------------------------------------------------
+
+@app.route("/about")
+def about():
+    """About page - accessible to everyone."""
+    current_user = None
+    invitation_form_submitted = False
+
+    if "user" in session:
+        current_user = get_current_user()
+
+    return render_template(
+        "about.html",
+        current_user=current_user,
+        invitation_form_submitted=invitation_form_submitted
+    )
+
+
+@app.route("/redeem-invite", methods=["POST"])
+@login_required
+def redeem_invite():
+    """Redeem an invitation code."""
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("about"))
+
+    code = request.form.get("invitation_code", "").strip()
+    if not code:
+        flash("Please enter an invitation code.", "warning")
+        return redirect(url_for("about"))
+
+    # Import here to avoid circular dependency
+    from admin_service import redeem_invitation_code
+
+    success, message = redeem_invitation_code(code, user)
+    if success:
+        flash(message, "success")
+        return redirect(url_for("dashboard"))
+    else:
+        flash(message, "danger")
+        return redirect(url_for("about"))
+
+
+# ---------------------------------------------------------
+# ADMIN PANEL
+# ---------------------------------------------------------
+
+@app.route("/admin")
+@login_required
+@admin_required
+def admin_panel():
+    """Admin panel for user management."""
+    from admin_service import search_users, get_invitation_codes, get_user_stats
+    from datetime import datetime, timezone
+
+    # Get search query if any
+    search_query = request.args.get("search", "").strip()
+
+    # Search users
+    users = search_users(search_query, limit=50)
+
+    # Get invitation codes (unused only by default)
+    invitation_codes = get_invitation_codes(include_used=False, limit=100)
+
+    # Get statistics
+    stats = get_user_stats()
+
+    return render_template(
+        "admin.html",
+        users=users,
+        invitation_codes=invitation_codes,
+        stats=stats,
+        search_query=search_query,
+        now=datetime.now(timezone.utc)
+    )
+
+
+@app.route("/admin/user/<user_id>")
+@login_required
+@admin_required
+def admin_user_details(user_id: str):
+    """Get detailed user information (AJAX endpoint)."""
+    from admin_service import get_user_details
+
+    details = get_user_details(user_id)
+    if not details:
+        return {"error": "User not found"}, 404
+
+    # Convert user object to dict for JSON serialization
+    user = details["user"]
+    user_dict = {
+        "_id": str(user.id),
+        "email": user.email,
+        "name": user.name,
+        "auth0_sub": user.auth0_sub,
+        "is_admin": user.is_admin,
+        "has_valid_invite": user.has_valid_invite,
+        "purchased_brushstrokes": user.purchased_brushstrokes,
+        "stripe_customer_id": user.stripe_customer_id,
+        "created_at": user.created_at.isoformat() if user.created_at else None,
+        "last_login": user.last_login.isoformat() if user.last_login else None,
+    }
+
+    # Convert transactions to dicts
+    transactions = []
+    for txn in details.get("recent_transactions", []):
+        transactions.append({
+            "transaction_type": txn.transaction_type,
+            "amount": txn.amount,
+            "created_at": txn.created_at.isoformat() if txn.created_at else None,
+        })
+
+    return {
+        "user": user_dict,
+        "recent_transactions": transactions,
+        "invitation_info": details.get("invitation_info"),
+    }
+
+
+@app.route("/admin/gift-tokens", methods=["POST"])
+@login_required
+@admin_required
+def admin_gift_tokens():
+    """Gift tokens to a user (AJAX endpoint)."""
+    from admin_service import gift_tokens
+
+    admin_user = get_current_user()
+    if not admin_user:
+        return {"error": "Admin user not found"}, 401
+
+    data = request.get_json()
+    user_id = data.get("user_id")
+    amount = data.get("amount")
+    description = data.get("description", "")
+
+    if not user_id or not amount:
+        return {"error": "Missing required fields"}, 400
+
+    try:
+        amount = int(amount)
+        if amount <= 0:
+            return {"error": "Amount must be positive"}, 400
+    except ValueError:
+        return {"error": "Invalid amount"}, 400
+
+    success = gift_tokens(admin_user, user_id, amount, description)
+    if success:
+        return {"success": True}
+    else:
+        return {"error": "Failed to gift tokens"}, 500
+
+
+@app.route("/admin/toggle-admin", methods=["POST"])
+@login_required
+@admin_required
+def admin_toggle_admin():
+    """Toggle admin status for a user (AJAX endpoint)."""
+    from admin_service import toggle_admin_status
+
+    data = request.get_json()
+    user_id = data.get("user_id")
+
+    if not user_id:
+        return {"error": "Missing user_id"}, 400
+
+    new_status = toggle_admin_status(user_id)
+    if new_status is not None:
+        return {"success": True, "is_admin": new_status}
+    else:
+        return {"error": "User not found"}, 404
+
+
+@app.route("/admin/grant-access", methods=["POST"])
+@login_required
+@admin_required
+def admin_grant_access():
+    """Manually grant invite access to a user (AJAX endpoint)."""
+    from admin_service import grant_invite_access
+
+    admin_user = get_current_user()
+    if not admin_user:
+        return {"error": "Admin user not found"}, 401
+
+    data = request.get_json()
+    user_id = data.get("user_id")
+
+    if not user_id:
+        return {"error": "Missing user_id"}, 400
+
+    success = grant_invite_access(user_id, admin_user)
+    if success:
+        return {"success": True}
+    else:
+        return {"error": "Failed to grant access"}, 500
+
+
+@app.route("/admin/create-invite", methods=["POST"])
+@login_required
+@admin_required
+def admin_create_invite():
+    """Create a new invitation code."""
+    from admin_service import create_invitation_code
+    from datetime import datetime, timezone
+
+    admin_user = get_current_user()
+    if not admin_user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("admin_panel"))
+
+    description = request.form.get("description", "").strip()
+    expires_at_str = request.form.get("expires_at", "").strip()
+
+    expires_at = None
+    if expires_at_str:
+        try:
+            # Parse datetime-local format (YYYY-MM-DDTHH:MM)
+            expires_at = datetime.fromisoformat(expires_at_str).replace(tzinfo=timezone.utc)
+        except ValueError:
+            flash("Invalid expiration date format", "danger")
+            return redirect(url_for("admin_panel"))
+
+    invitation = create_invitation_code(admin_user, description, expires_at)
+    if invitation:
+        flash(f"Invitation code created: {invitation.code}", "success")
+    else:
+        flash("Failed to create invitation code", "danger")
+
+    return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/delete-invite/<code_id>", methods=["POST"])
+@login_required
+@admin_required
+def admin_delete_invite(code_id: str):
+    """Delete an invitation code."""
+    from admin_service import delete_invitation_code
+
+    success = delete_invitation_code(code_id)
+    if success:
+        flash("Invitation code deleted", "success")
+    else:
+        flash("Failed to delete invitation code", "danger")
+
+    return redirect(url_for("admin_panel"))
 
 
 # ---------------------------------------------------------

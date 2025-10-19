@@ -1,5 +1,5 @@
 from functools import wraps
-from flask import session, redirect, url_for
+from flask import session, redirect, url_for, flash
 from authlib.integrations.flask_client import OAuth
 from os import environ as env
 
@@ -17,9 +17,80 @@ oauth.register(
 )
 
 def login_required(f):
+    """Require user to be logged in."""
     @wraps(f)
     def decorated(*args, **kwargs):
         if "user" not in session:
             return redirect(url_for("login"))
+        return f(*args, **kwargs)
+    return decorated
+
+def invite_required(f):
+    """
+    Require user to have a valid invitation code.
+
+    Users without an invitation can only access the about page.
+    Admins automatically have access.
+    """
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user" not in session:
+            return redirect(url_for("login"))
+
+        # Import here to avoid circular dependency
+        from models import get_or_create_user
+
+        # Get or create user (this handles new users)
+        userinfo = session["user"].get("userinfo", {})
+        auth0_sub = userinfo.get("sub")
+        email = userinfo.get("email")
+        name = userinfo.get("name")
+        picture = userinfo.get("picture")
+
+        if not auth0_sub or not email:
+            flash("Invalid session. Please log in again.", "danger")
+            return redirect(url_for("login"))
+
+        user = get_or_create_user(auth0_sub, email, name, picture)
+
+        # Admins always have access
+        if user.is_admin:
+            return f(*args, **kwargs)
+
+        # Check if user has valid invitation
+        if not user.has_valid_invite:
+            flash("You need an invitation code to access this feature. Please contact an administrator.", "warning")
+            return redirect(url_for("about"))
+
+        return f(*args, **kwargs)
+    return decorated
+
+def admin_required(f):
+    """Require user to be an admin."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        if "user" not in session:
+            return redirect(url_for("login"))
+
+        # Import here to avoid circular dependency
+        from models import get_or_create_user
+
+        # Get or create user (this handles new users)
+        userinfo = session["user"].get("userinfo", {})
+        auth0_sub = userinfo.get("sub")
+        email = userinfo.get("email")
+        name = userinfo.get("name")
+        picture = userinfo.get("picture")
+
+        if not auth0_sub or not email:
+            flash("Invalid session. Please log in again.", "danger")
+            return redirect(url_for("login"))
+
+        user = get_or_create_user(auth0_sub, email, name, picture)
+
+        if not user.is_admin:
+            flash("You need admin privileges to access this page.", "danger")
+            return redirect(url_for("about"))
+
         return f(*args, **kwargs)
     return decorated

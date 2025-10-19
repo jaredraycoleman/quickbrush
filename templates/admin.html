@@ -1,0 +1,507 @@
+{% extends "base.html" %}
+
+{% block title %}Admin Panel - Quickbrush{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="row">
+        <div class="col-12">
+            <h1 class="mb-4">
+                <i class="bi bi-shield-lock-fill text-danger"></i> Admin Panel
+            </h1>
+        </div>
+    </div>
+
+    <!-- Statistics Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card bg-primary text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Total Users</h5>
+                    <h2 class="mb-0">{{ stats.total_users }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-success text-white">
+                <div class="card-body">
+                    <h5 class="card-title">With Access</h5>
+                    <h2 class="mb-0">{{ stats.users_with_invites }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-warning text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Without Access</h5>
+                    <h2 class="mb-0">{{ stats.users_without_invites }}</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card bg-info text-white">
+                <div class="card-body">
+                    <h5 class="card-title">Available Codes</h5>
+                    <h2 class="mb-0">{{ stats.available_codes }}</h2>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button">
+                <i class="bi bi-people-fill"></i> User Management
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="invites-tab" data-bs-toggle="tab" data-bs-target="#invites" type="button">
+                <i class="bi bi-envelope-fill"></i> Invitation Codes
+            </button>
+        </li>
+    </ul>
+
+    <!-- Tab Content -->
+    <div class="tab-content" id="adminTabsContent">
+        <!-- User Management Tab -->
+        <div class="tab-pane fade show active" id="users" role="tabpanel">
+            <!-- Search -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <form method="GET" action="{{ url_for('admin_panel') }}">
+                        <div class="row">
+                            <div class="col-md-10">
+                                <input type="text"
+                                       class="form-control"
+                                       name="search"
+                                       placeholder="Search users by email, name, or Auth0 ID..."
+                                       value="{{ search_query or '' }}">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-primary w-100">
+                                    <i class="bi bi-search"></i> Search
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Users Table -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Email</th>
+                                    <th>Name</th>
+                                    <th>Access</th>
+                                    <th>Admin</th>
+                                    <th>Tokens</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for user in users %}
+                                <tr>
+                                    <td>
+                                        <small class="text-muted">{{ user.email }}</small>
+                                    </td>
+                                    <td>{{ user.name or 'N/A' }}</td>
+                                    <td>
+                                        {% if user.has_valid_invite %}
+                                            <span class="badge bg-success">Yes</span>
+                                        {% else %}
+                                            <span class="badge bg-warning">No</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if user.is_admin %}
+                                            <span class="badge bg-danger">Admin</span>
+                                        {% else %}
+                                            <span class="badge bg-secondary">User</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>{{ user.purchased_brushstrokes }}</td>
+                                    <td>
+                                        <small>{{ user.created_at.strftime('%Y-%m-%d') }}</small>
+                                    </td>
+                                    <td>
+                                        <button class="btn btn-sm btn-info"
+                                                data-bs-toggle="modal"
+                                                data-bs-target="#userModal"
+                                                onclick="loadUserDetails('{{ user.id }}')">
+                                            <i class="bi bi-eye"></i> View
+                                        </button>
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Invitation Codes Tab -->
+        <div class="tab-pane fade" id="invites" role="tabpanel">
+            <!-- Create New Code -->
+            <div class="card mb-4">
+                <div class="card-body">
+                    <h5 class="card-title">Create New Invitation Code</h5>
+                    <form method="POST" action="{{ url_for('admin_create_invite') }}">
+                        <div class="row align-items-end">
+                            <div class="col-md-6">
+                                <label class="form-label">Description (optional)</label>
+                                <input type="text"
+                                       class="form-control"
+                                       name="description"
+                                       placeholder="e.g., 'For John Smith'">
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Expiration (optional)</label>
+                                <input type="datetime-local"
+                                       class="form-control"
+                                       name="expires_at">
+                            </div>
+                            <div class="col-md-2">
+                                <button type="submit" class="btn btn-success w-100">
+                                    <i class="bi bi-plus-circle"></i> Create
+                                </button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Invitation Codes Table -->
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="card-title mb-0">Invitation Codes</h5>
+                        <div class="form-check form-switch">
+                            <input class="form-check-input"
+                                   type="checkbox"
+                                   id="showUsedCodes"
+                                   onchange="toggleUsedCodes(this.checked)">
+                            <label class="form-check-label" for="showUsedCodes">
+                                Show used codes
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>Description</th>
+                                    <th>Status</th>
+                                    <th>Created By</th>
+                                    <th>Created</th>
+                                    <th>Used By</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="inviteCodesTable">
+                                {% for code in invitation_codes %}
+                                <tr class="{% if code.is_used %}used-code d-none{% endif %}">
+                                    <td>
+                                        <code class="text-primary">{{ code.code }}</code>
+                                        <button class="btn btn-sm btn-link"
+                                                onclick="copyToClipboard('{{ code.code }}')">
+                                            <i class="bi bi-clipboard"></i>
+                                        </button>
+                                    </td>
+                                    <td>{{ code.description or '-' }}</td>
+                                    <td>
+                                        {% if code.is_used %}
+                                            <span class="badge bg-secondary">Used</span>
+                                        {% elif code.expires_at and code.expires_at < now %}
+                                            <span class="badge bg-danger">Expired</span>
+                                        {% else %}
+                                            <span class="badge bg-success">Available</span>
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        <small>{{ code.created_by.email if code.created_by else 'Unknown' }}</small>
+                                    </td>
+                                    <td>
+                                        <small>{{ code.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
+                                    </td>
+                                    <td>
+                                        {% if code.used_by %}
+                                            <small class="text-muted">{{ code.used_by.email }}</small>
+                                            <br>
+                                            <small class="text-muted">{{ code.used_at.strftime('%Y-%m-%d') if code.used_at else '' }}</small>
+                                        {% else %}
+                                            -
+                                        {% endif %}
+                                    </td>
+                                    <td>
+                                        {% if not code.is_used %}
+                                        <form method="POST"
+                                              action="{{ url_for('admin_delete_invite', code_id=code.id) }}"
+                                              style="display: inline;"
+                                              onsubmit="return confirm('Delete this invitation code?');">
+                                            <button type="submit" class="btn btn-sm btn-danger">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        </form>
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- User Details Modal -->
+<div class="modal fade" id="userModal" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">User Details</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body" id="userModalBody">
+                <div class="text-center">
+                    <div class="spinner-border" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyToClipboard(text) {
+    navigator.clipboard.writeText(text).then(() => {
+        alert('Code copied to clipboard!');
+    });
+}
+
+function toggleUsedCodes(show) {
+    const usedRows = document.querySelectorAll('.used-code');
+    usedRows.forEach(row => {
+        if (show) {
+            row.classList.remove('d-none');
+        } else {
+            row.classList.add('d-none');
+        }
+    });
+}
+
+function loadUserDetails(userId) {
+    const modalBody = document.getElementById('userModalBody');
+    modalBody.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
+
+    fetch(`/admin/user/${userId}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                modalBody.innerHTML = `<div class="alert alert-danger">${data.error}</div>`;
+                return;
+            }
+
+            const user = data.user;
+            let html = `
+                <div class="row">
+                    <div class="col-md-6">
+                        <h6>Basic Info</h6>
+                        <table class="table table-sm">
+                            <tr><th>Email:</th><td>${user.email}</td></tr>
+                            <tr><th>Name:</th><td>${user.name || 'N/A'}</td></tr>
+                            <tr><th>Auth0 ID:</th><td><small>${user.auth0_sub}</small></td></tr>
+                            <tr><th>Created:</th><td>${new Date(user.created_at).toLocaleDateString()}</td></tr>
+                            <tr><th>Last Login:</th><td>${user.last_login ? new Date(user.last_login).toLocaleDateString() : 'N/A'}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6>Access & Tokens</h6>
+                        <table class="table table-sm">
+                            <tr><th>Admin:</th><td>${user.is_admin ? '<span class="badge bg-danger">Yes</span>' : 'No'}</td></tr>
+                            <tr><th>Has Access:</th><td>${user.has_valid_invite ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-warning">No</span>'}</td></tr>
+                            <tr><th>Purchased Tokens:</th><td>${user.purchased_brushstrokes}</td></tr>
+                            <tr><th>Stripe ID:</th><td><small>${user.stripe_customer_id || 'N/A'}</small></td></tr>
+                        </table>
+                    </div>
+                </div>
+
+                <hr>
+
+                <h6>Actions</h6>
+                <div class="btn-group mb-3" role="group">
+                    <button class="btn btn-primary" onclick="showGiftTokensForm('${user._id}')">
+                        <i class="bi bi-gift"></i> Gift Tokens
+                    </button>
+                    <button class="btn btn-warning" onclick="toggleAdminStatus('${user._id}')">
+                        <i class="bi bi-shield"></i> Toggle Admin
+                    </button>
+                    ${!user.has_valid_invite ? `
+                    <button class="btn btn-success" onclick="grantAccess('${user._id}')">
+                        <i class="bi bi-check-circle"></i> Grant Access
+                    </button>
+                    ` : ''}
+                </div>
+
+                <div id="giftTokensForm" class="d-none">
+                    <div class="card bg-light">
+                        <div class="card-body">
+                            <h6>Gift Tokens</h6>
+                            <form onsubmit="submitGiftTokens(event, '${user._id}')">
+                                <div class="mb-3">
+                                    <label class="form-label">Amount</label>
+                                    <input type="number" class="form-control" name="amount" min="1" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Description (optional)</label>
+                                    <input type="text" class="form-control" name="description" placeholder="e.g., 'Compensation for bug'">
+                                </div>
+                                <button type="submit" class="btn btn-success">Submit</button>
+                                <button type="button" class="btn btn-secondary" onclick="hideGiftTokensForm()">Cancel</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            if (data.invitation_info) {
+                html += `
+                    <hr>
+                    <h6>Invitation Info</h6>
+                    <table class="table table-sm">
+                        <tr><th>Code:</th><td><code>${data.invitation_info.code}</code></td></tr>
+                        <tr><th>Created By:</th><td>${data.invitation_info.created_by}</td></tr>
+                        <tr><th>Created:</th><td>${new Date(data.invitation_info.created_at).toLocaleDateString()}</td></tr>
+                    </table>
+                `;
+            }
+
+            if (data.recent_transactions && data.recent_transactions.length > 0) {
+                html += `
+                    <hr>
+                    <h6>Recent Transactions</h6>
+                    <div class="table-responsive">
+                        <table class="table table-sm">
+                            <thead>
+                                <tr><th>Type</th><th>Amount</th><th>Date</th></tr>
+                            </thead>
+                            <tbody>
+                `;
+                data.recent_transactions.forEach(txn => {
+                    html += `
+                        <tr>
+                            <td><span class="badge bg-secondary">${txn.transaction_type}</span></td>
+                            <td>${txn.amount > 0 ? '+' : ''}${txn.amount}</td>
+                            <td><small>${new Date(txn.created_at).toLocaleDateString()}</small></td>
+                        </tr>
+                    `;
+                });
+                html += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+            }
+
+            modalBody.innerHTML = html;
+        })
+        .catch(error => {
+            modalBody.innerHTML = `<div class="alert alert-danger">Error loading user details</div>`;
+            console.error(error);
+        });
+}
+
+function showGiftTokensForm(userId) {
+    document.getElementById('giftTokensForm').classList.remove('d-none');
+}
+
+function hideGiftTokensForm() {
+    document.getElementById('giftTokensForm').classList.add('d-none');
+}
+
+function submitGiftTokens(event, userId) {
+    event.preventDefault();
+    const form = event.target;
+    const amount = form.amount.value;
+    const description = form.description.value;
+
+    fetch('/admin/gift-tokens', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId, amount: parseInt(amount), description})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Tokens gifted successfully!');
+            loadUserDetails(userId);
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error gifting tokens');
+        console.error(error);
+    });
+}
+
+function toggleAdminStatus(userId) {
+    if (!confirm('Toggle admin status for this user?')) return;
+
+    fetch('/admin/toggle-admin', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Admin status updated!');
+            loadUserDetails(userId);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error updating admin status');
+        console.error(error);
+    });
+}
+
+function grantAccess(userId) {
+    if (!confirm('Grant full access to this user?')) return;
+
+    fetch('/admin/grant-access', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Access granted!');
+            loadUserDetails(userId);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error granting access');
+        console.error(error);
+    });
+}
+</script>
+{% endblock %}

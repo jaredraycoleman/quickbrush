@@ -129,6 +129,11 @@ class User(Document):
     # Brushstroke balance (non-expiring purchased packs)
     purchased_brushstrokes = IntField(default=0)  # Total purchased via one-time packs
 
+    # Access control
+    is_admin = BooleanField(default=False)  # Admin users have access to admin panel
+    invitation_code = StringField()  # The invitation code used to register (if any)
+    has_valid_invite = BooleanField(default=False)  # Whether user has access to the full app
+
     # Metadata
     is_active = BooleanField(default=True)
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
@@ -225,6 +230,75 @@ class User(Document):
             self.subscription.allowance_used_this_period = 0 # type: ignore
             self.subscription.updated_at = datetime.now(timezone.utc) # type: ignore
             self.updated_at = datetime.now(timezone.utc)
+
+
+# ========================================
+# INVITATION CODE MODEL
+# ========================================
+
+class InvitationCode(Document):
+    """
+    Single-use invitation codes for controlling access to the application.
+
+    Only admin users can create invitation codes. Each code can be used once
+    to grant a user access to the full application.
+    """
+    code = StringField(required=True, unique=True)  # The invitation code
+
+    # Creation info
+    created_by = ReferenceField(User, required=True)  # Admin who created it
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    # Usage info
+    is_used = BooleanField(default=False)
+    used_by = ReferenceField(User)  # User who redeemed it
+    used_at = DateTimeField()
+
+    # Optional metadata
+    description = StringField()  # Optional note about who this is for
+    expires_at = DateTimeField()  # Optional expiration
+
+    meta = {
+        'collection': 'invitation_codes',
+        'indexes': [
+            'code',
+            'created_by',
+            'is_used',
+            'created_at',
+        ]
+    }
+
+    def __str__(self):
+        return f"InvitationCode({self.code}, used={self.is_used})"
+
+    @staticmethod
+    def generate_code() -> str:
+        """Generate a random invitation code."""
+        return secrets.token_urlsafe(16)
+
+    def redeem(self, user: User) -> bool:
+        """
+        Redeem this invitation code for a user.
+
+        Returns True if successful, False if already used or expired.
+        """
+        if self.is_used:
+            return False
+
+        if self.expires_at and self.expires_at < datetime.now(timezone.utc):
+            return False
+
+        self.is_used = True
+        self.used_by = user
+        self.used_at = datetime.now(timezone.utc)
+        self.save()
+
+        # Grant access to the user
+        user.has_valid_invite = True
+        user.invitation_code = self.code
+        user.save()
+
+        return True
 
 
 # ========================================
