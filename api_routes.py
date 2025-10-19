@@ -83,8 +83,8 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
 
 class GenerateImageRequest(BaseModel):
     """Request model for image generation."""
-    text: str = Field(..., description="Description of the image to generate", min_length=1, max_length=1000)
-    prompt: Optional[str] = Field(None, description="Additional context or prompt", max_length=2000)
+    text: str = Field(..., description="Description of the image to generate", min_length=1, max_length=4000)
+    prompt: Optional[str] = Field(None, description="Additional context or prompt", max_length=500)
     generation_type: Literal["character", "scene", "creature", "item"] = Field(
         default="character",
         description="Type of image to generate"

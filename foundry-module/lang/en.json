@@ -38,16 +38,16 @@
       },
       "AspectRatio": "Aspect Ratio",
       "AspectRatios": {
-        "square": "⬜ Square (1024x1024)",
-        "landscape": "🖼️ Landscape (1536x1024)",
-        "portrait": "🖼️ Portrait (1024x1536)"
+        "square": "Square (1024x1024)",
+        "landscape": "Landscape (1536x1024)",
+        "portrait": "Portrait (1024x1536)"
       },
       "Generate": "Generate Image",
       "Cancel": "Cancel"
     },
     "Notifications": {
       "NoApiKey": "Please set your Quickbrush API key in module settings",
-      "Generating": "Generating image with Quickbrush...",
+      "Generating": "Generating image with Quickbrush. We'll notify you when it's ready!",
       "Success": "Image generated successfully!",
       "Error": "Failed to generate image: {error}",
       "Saved": "Image saved to {folder}",

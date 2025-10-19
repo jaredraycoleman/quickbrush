@@ -41,6 +41,26 @@
     <p class="notes">Choose the shape of your canvas. Default: Square for most, Landscape for scenes.</p>
   </div>
 
+  <div class="form-group">
+    <label>Reference Images (Optional - Max 3)</label>
+    <div class="reference-images-container">
+      {{#each referenceImages}}
+        <div class="reference-image-item">
+          <img src="{{this}}" alt="Reference {{@index}}" />
+          <button type="button" class="remove-reference-image" data-index="{{@index}}">
+            <i class="fas fa-times"></i>
+          </button>
+        </div>
+      {{/each}}
+      {{#if (lt referenceImages.length 3)}}
+        <button type="button" class="add-reference-image">
+          <i class="fas fa-plus"></i> Add Image
+        </button>
+      {{/if}}
+    </div>
+    <p class="notes">Add up to 3 reference images to guide the generation style.</p>
+  </div>
+
   <footer class="sheet-footer flexrow">
     <button type="button" class="dialog-button cancel" data-button="cancel">
       <i class="fas fa-times"></i> {{localize "QUICKBRUSH.Dialog.Cancel"}}

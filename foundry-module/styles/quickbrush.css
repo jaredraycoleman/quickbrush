@@ -1,0 +1,131 @@
+/* Quickbrush Module Styles - Minimal Theme */
+
+/* Light background for dialog */
+.quickbrush-dialog .window-content {
+  background: #f9f7f1;
+}
+
+/* Submit button - Quickbrush orange */
+.quickbrush-form .dialog-button.submit {
+  background-color: #da7b42;
+  color: white;
+}
+
+.quickbrush-form .dialog-button.submit:hover {
+  background-color: #c86c36;
+}
+
+/* Reference Images - Compact thumbnails */
+.reference-images-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.reference-image-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border: 2px solid #e2c290;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.reference-image-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.reference-image-item .remove-reference-image {
+  position: absolute;
+  top: 2px;
+  right: 2px;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  background: rgba(201, 42, 42, 0.9);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.reference-image-item .remove-reference-image:hover {
+  background: rgba(201, 42, 42, 1);
+}
+
+.add-reference-image {
+  width: 80px;
+  height: 80px;
+  padding: 0.5rem;
+  background: white;
+  border: 2px dashed #da7b42;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  font-size: 0.75rem;
+  color: #da7b42;
+  transition: all 0.2s;
+}
+
+.add-reference-image:hover {
+  background: #fef9e7;
+  border-color: #c86c36;
+  color: #c86c36;
+}
+
+/* Directory Buttons */
+.quickbrush-directory-btn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(90deg, #543a1e, #7a5226);
+  color: #fef9e7;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Marcellus SC', serif;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.quickbrush-directory-btn:hover {
+  background: linear-gradient(90deg, #7a5226, #543a1e);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}
+
+.quickbrush-sync-btn {
+  padding: 0.5rem 1rem;
+  background: linear-gradient(90deg, #2e4e3a, #4a6e56);
+  color: #fef9e7;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-family: 'Marcellus SC', serif;
+  font-size: 0.9rem;
+  letter-spacing: 0.5px;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+}
+
+.quickbrush-sync-btn:hover {
+  background: linear-gradient(90deg, #4a6e56, #2e4e3a);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+}

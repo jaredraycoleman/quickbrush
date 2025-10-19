@@ -18,10 +18,19 @@ class QuickbrushAPI {
   /**
    * Generate an image using Quickbrush API
    */
-  async generateImage({ text, prompt = '', generation_type = 'character', quality = 'medium', aspect_ratio = 'square' }) {
+  async generateImage({ text, prompt = '', generation_type = 'character', quality = 'medium', aspect_ratio = 'square', reference_image_paths = [] }) {
     if (!this.apiKey) {
       throw new Error(game.i18n.localize('QUICKBRUSH.Notifications.NoApiKey'));
     }
+
+    const requestBody = {
+      text,
+      prompt,
+      generation_type,
+      quality,
+      aspect_ratio,
+      reference_image_paths
+    };
 
     const response = await fetch(`${this.apiUrl}/generate`, {
       method: 'POST',
@@ -29,26 +38,34 @@ class QuickbrushAPI {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${this.apiKey}`
       },
-      body: JSON.stringify({
-        text,
-        prompt,
-        generation_type,
-        quality,
-        aspect_ratio
-      })
+      body: JSON.stringify(requestBody)
     });
 
     if (!response.ok) {
       const error = await response.json().catch(() => ({ detail: response.statusText }));
+
+      console.error('Quickbrush API error:', response.status, error);
 
       // Handle specific error types
       if (response.status === 429) {
         throw new Error(game.i18n.localize('QUICKBRUSH.Notifications.RateLimit'));
       } else if (response.status === 402) {
         throw new Error(game.i18n.localize('QUICKBRUSH.Notifications.InsufficientBrushstrokes'));
+      } else if (response.status === 422) {
+        // Validation error - extract meaningful message
+        let message = 'Validation failed';
+        if (Array.isArray(error.detail)) {
+          // FastAPI validation errors are arrays
+          message = error.detail.map(e => `${e.loc?.join('.')}: ${e.msg}`).join(', ');
+        } else if (error.detail) {
+          message = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
+        }
+        console.error('Validation errors:', error.detail);
+        throw new Error(`Validation error: ${message}`);
       }
 
-      throw new Error(error.detail || error.message || 'Unknown error');
+      const errorMsg = error.detail || error.message || (typeof error === 'string' ? error : JSON.stringify(error)) || 'Unknown error';
+      throw new Error(errorMsg);
     }
 
     return await response.json();
@@ -121,6 +138,7 @@ class QuickbrushDialog extends FormApplication {
   constructor(options = {}) {
     super({}, options);
     this.data = options.data || {};
+    this.referenceImages = options.data?.referenceImages || [];
   }
 
   static get defaultOptions() {
@@ -165,6 +183,7 @@ class QuickbrushDialog extends FormApplication {
       generation_type: this.data.generation_type || 'character',
       quality: this.data.quality || 'medium',
       aspect_ratio: this.data.aspect_ratio || 'square',
+      referenceImages: this.referenceImages,
       types,
       qualities,
       aspectRatios
@@ -185,6 +204,35 @@ class QuickbrushDialog extends FormApplication {
         aspectRatioSelect.val('square');
       }
     });
+
+    // Reference image picker buttons
+    html.find('.add-reference-image').on('click', (event) => {
+      event.preventDefault();
+      this._pickReferenceImage();
+    });
+
+    // Remove reference image buttons
+    html.find('.remove-reference-image').on('click', (event) => {
+      event.preventDefault();
+      const index = $(event.currentTarget).data('index');
+      this.referenceImages.splice(index, 1);
+      this.render();
+    });
+  }
+
+  async _pickReferenceImage() {
+    const fp = new FilePicker({
+      type: 'image',
+      callback: (path) => {
+        if (this.referenceImages.length < 3) {
+          this.referenceImages.push(path);
+          this.render();
+        } else {
+          ui.notifications.warn('Maximum 3 reference images allowed', { permanent: false });
+        }
+      }
+    });
+    fp.browse();
   }
 
   async _updateObject(event, formData) {
@@ -199,8 +247,14 @@ class QuickbrushDialog extends FormApplication {
     const api = new QuickbrushAPI();
 
     try {
-      // Show progress notification
-      ui.notifications.info(game.i18n.localize('QUICKBRUSH.Notifications.Generating'));
+      // Show progress notification (permanent)
+      ui.notifications.info(game.i18n.localize('QUICKBRUSH.Notifications.Generating'), { permanent: true });
+
+      // Close the dialog immediately so user can continue working
+      this.close();
+
+      // Add reference images to formData
+      formData.reference_image_paths = this.referenceImages || [];
 
       // Generate image
       const result = await api.generateImage(formData);
@@ -233,18 +287,18 @@ class QuickbrushDialog extends FormApplication {
         refinedDescription: result.refined_description
       });
 
-      // Success!
-      ui.notifications.info(game.i18n.format('QUICKBRUSH.Notifications.Saved', {
-        folder: folder
-      }));
-
-      this.close();
+      // Success! Show permanent notification
+      ui.notifications.info(
+        `Image generated and saved successfully to ${folder}! View it in the Quickbrush Gallery journal.`,
+        { permanent: true }
+      );
 
     } catch (error) {
       console.error('Quickbrush generation error:', error);
-      ui.notifications.error(game.i18n.format('QUICKBRUSH.Notifications.Error', {
-        error: error.message
-      }));
+      ui.notifications.error(
+        game.i18n.format('QUICKBRUSH.Notifications.Error', { error: error.message }),
+        { permanent: true }
+      );
     }
   }
 }
@@ -527,12 +581,33 @@ Hooks.on('renderJournalEntrySheet', (app, html) => {
 
     menuItem.find('button').on('click', () => {
       const textContent = extractVisibleJournalText($html);
-      console.log('Quickbrush | Opening dialog for type:', type, 'with text:', textContent.substring(0, 100));
+
+      // Extract first 3 images from journal
+      const referenceImages = [];
+      const $visiblePages = $html.find('article.journal-entry-page');
+      $visiblePages.each(function() {
+        if (referenceImages.length < 3) {
+          $(this).find('.journal-page-content img').each(function() {
+            if (referenceImages.length < 3) {
+              const src = $(this).attr('src');
+              if (src) {
+                referenceImages.push(src);
+              }
+            }
+          });
+        }
+      });
+
+      console.log('Quickbrush | Opening dialog for type:', type);
+      console.log('Quickbrush | Text length:', textContent.length);
+      console.log('Quickbrush | Reference images:', referenceImages.length);
+
       new QuickbrushDialog({
         data: {
           text: textContent,
           generation_type: type,
-          aspect_ratio: type === 'scene' ? 'landscape' : 'square'
+          aspect_ratio: type === 'scene' ? 'landscape' : 'square',
+          referenceImages
         }
       }).render(true);
     });
@@ -554,11 +629,11 @@ Hooks.on('renderJournalDirectory', (app, html) => {
   const $html = html instanceof jQuery ? html : $(html);
 
   const buttons = $(`
+    <button class="quickbrush-sync-btn">
+      <i class="fas fa-sync"></i> Quickbrush Sync
+    </button>
     <button class="quickbrush-directory-btn">
       <i class="fas fa-palette"></i> ${game.i18n.localize('QUICKBRUSH.ButtonLabel')}
-    </button>
-    <button class="quickbrush-sync-btn">
-      <i class="fas fa-sync"></i> Sync Quickbrush Library
     </button>
   `);
 
