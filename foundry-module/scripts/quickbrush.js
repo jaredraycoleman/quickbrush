@@ -316,7 +316,17 @@ class QuickbrushDialog extends FormApplication {
 
       // Save to Foundry
       const folder = await QuickbrushGallery.getOrCreateFolder();
-      const filename = `quickbrush-${result.generation_id}.webp`;
+
+      // Use image name if available, otherwise use generation_id
+      let filename;
+      if (result.image_name) {
+        // Sanitize the image name for filesystem
+        const sanitized = result.image_name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+        filename = `${sanitized}.webp`;
+      } else {
+        filename = `quickbrush-${result.generation_id}.webp`;
+      }
+
       const file = new File([imageBlob], filename, { type: 'image/webp' });
 
       const uploadResult = await FilePicker.upload('data', folder, file);
@@ -330,7 +340,8 @@ class QuickbrushDialog extends FormApplication {
         quality: formData.quality,
         aspectRatio: formData.aspect_ratio,
         generationId: result.generation_id,
-        refinedDescription: result.refined_description
+        refinedDescription: result.refined_description,
+        imageName: result.image_name
       });
 
       // Auto-update target document image if requested
@@ -535,14 +546,17 @@ class QuickbrushGallery {
   /**
    * Add an image to the gallery
    */
-  static async addToGallery({ imageUrl, type, description, prompt, quality, aspectRatio, generationId, refinedDescription }) {
+  static async addToGallery({ imageUrl, type, description, prompt, quality, aspectRatio, generationId, refinedDescription, imageName }) {
     const journal = await this.getOrCreateGalleryJournal();
     const date = new Date().toLocaleString();
+
+    // Create a title with image name if available
+    let title = imageName ? `${imageName} - ${date}` : date;
 
     const template = game.i18n.localize('QUICKBRUSH.Gallery.EntryTemplate');
     const entry = template
       .replace('{type}', type.charAt(0).toUpperCase() + type.slice(1))
-      .replace('{date}', date)
+      .replace('{date}', title)
       .replace('{description}', description)
       .replace('{quality}', quality.charAt(0).toUpperCase() + quality.slice(1))
       .replace('{aspectRatio}', aspectRatio)
@@ -629,16 +643,26 @@ class QuickbrushGallery {
           }
           const imageBlob = await api.downloadImage(imageUrl);
 
-          // Save to Foundry
-          const filename = `quickbrush-${generationId}.webp`;
+          // Save to Foundry - use image name if available
+          let filename;
+          if (gen.image_name) {
+            const sanitized = gen.image_name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+            filename = `${sanitized}.webp`;
+          } else {
+            filename = `quickbrush-${generationId}.webp`;
+          }
           const file = new File([imageBlob], filename, { type: 'image/webp' });
           const uploadResult = await FilePicker.upload('data', folder, file);
+
+          // Create title with image name if available
+          const dateStr = new Date(gen.created_at).toLocaleString();
+          const title = gen.image_name ? `${gen.image_name} - ${dateStr}` : dateStr;
 
           // Add to gallery (prepend so it maintains chronological order)
           const template = game.i18n.localize('QUICKBRUSH.Gallery.EntryTemplate');
           const entry = template
             .replace('{type}', (gen.generation_type || 'unknown').charAt(0).toUpperCase() + (gen.generation_type || 'unknown').slice(1))
-            .replace('{date}', new Date(gen.created_at).toLocaleString())
+            .replace('{date}', title)
             .replace('{description}', gen.user_text || 'No description')
             .replace('{quality}', (gen.quality || 'medium').charAt(0).toUpperCase() + (gen.quality || 'medium').slice(1))
             .replace('{aspectRatio}', 'N/A')
@@ -690,8 +714,8 @@ function extractVisibleJournalText(html) {
       }
     });
 
-    // Limit to reasonable length
-    textContent = textContent.substring(0, 4000).trim();
+    // Limit to maximum allowed length (10000 characters)
+    textContent = textContent.substring(0, 10000).trim();
   }
 
   return textContent;

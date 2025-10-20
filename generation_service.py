@@ -29,6 +29,7 @@ class GenerationResult:
         success: bool,
         generation_id: Optional[str] = None,
         refined_description: Optional[str] = None,
+        image_name: Optional[str] = None,
         brushstrokes_used: int = 0,
         brushstrokes_remaining: int = 0,
         remaining_image_slots: int = 0,
@@ -37,6 +38,7 @@ class GenerationResult:
         self.success = success
         self.generation_id = generation_id
         self.refined_description = refined_description
+        self.image_name = image_name
         self.brushstrokes_used = brushstrokes_used
         self.brushstrokes_remaining = brushstrokes_remaining
         self.remaining_image_slots = remaining_image_slots
@@ -159,11 +161,13 @@ def generate_image(
 
         # Step 1: Generate refined description (include reference images so description is consistent)
         try:
-            description = generator.get_description(
+            description_obj = generator.get_description(
                 text=text,
                 prompt=prompt,
                 reference_images=reference_image_paths
             )
+            description_text = description_obj.text
+            image_name = description_obj.name
         except Exception as e:
             logger.error(f"Error generating description: {e}")
             return GenerationResult(
@@ -175,7 +179,7 @@ def generate_image(
         # Step 2: Generate image (returns WebP bytes)
         try:
             image_data = generator.generate_image(
-                description=description,
+                description=description_text,
                 reference_images=reference_image_paths,
                 image_size=size,  # type: ignore
                 quality=quality,  # type: ignore
@@ -209,11 +213,12 @@ def generate_image(
                 aspect_ratio=aspect_ratio,
                 user_text=text,
                 user_prompt=prompt,
-                refined_description=description,
+                refined_description=description_text,
                 image_size=size,
                 brushstrokes_used=brushstrokes_needed,
                 source=source,
                 api_key=api_key,
+                image_name=image_name,
             )
         except Exception as e:
             logger.error(f"Error saving generation: {e}")
@@ -243,7 +248,8 @@ def generate_image(
         return GenerationResult(
             success=True,
             generation_id=str(generation.id), # type: ignore
-            refined_description=description,
+            refined_description=description_text,
+            image_name=image_name,
             brushstrokes_used=brushstrokes_needed,
             brushstrokes_remaining=remaining_brushstrokes,
             remaining_image_slots=remaining_slots

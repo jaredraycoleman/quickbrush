@@ -19,6 +19,7 @@ import logging
 from models import User
 from api_key_service import authenticate_api_key
 from generation_service import generate_image as generate_image_shared
+from config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +84,8 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
 
 class GenerateImageRequest(BaseModel):
     """Request model for image generation."""
-    text: str = Field(..., description="Description of the image to generate", min_length=1, max_length=10_000)
-    prompt: Optional[str] = Field(None, description="Additional context or prompt", max_length=500)
+    text: str = Field(..., description="Description of the image to generate", min_length=1, max_length=Config.MAX_TEXT_LENGTH)
+    prompt: Optional[str] = Field(None, description="Additional context or prompt", max_length=Config.MAX_PROMPT_LENGTH)
     generation_type: Literal["character", "scene", "creature", "item"] = Field(
         default="character",
         description="Type of image to generate"
@@ -127,6 +128,7 @@ class GenerateImageResponse(BaseModel):
     generation_id: str
     image_url: str
     refined_description: str
+    image_name: Optional[str] = None
     brushstrokes_used: int
     brushstrokes_remaining: int
     remaining_image_slots: int
@@ -325,6 +327,7 @@ async def generate_image(
         generation_id=result.generation_id,
         image_url=f"/api/image/{result.generation_id}",
         refined_description=result.refined_description,
+        image_name=result.image_name,
         brushstrokes_used=result.brushstrokes_used,
         brushstrokes_remaining=result.brushstrokes_remaining,
         remaining_image_slots=result.remaining_image_slots,
@@ -352,10 +355,21 @@ async def get_image(
             detail="Image not found"
         )
 
+    # Use generated name if available, otherwise fall back to generation_id
+    import re
+    if generation.image_name:
+        filename = str(generation.image_name)
+        # Sanitize filename (remove invalid characters)
+        filename = re.sub(r'[^\w\s-]', '', filename).strip()
+        filename = re.sub(r'[-\s]+', '-', filename)
+    else:
+        filename = f"generated_{generation_id}"
+    filename = f"{filename}.webp"
+
     return Response(
         content=generation.image_data,
         media_type="image/webp",
-        headers={"Content-Disposition": f'inline; filename="generated_{generation_id}.webp"'}
+        headers={"Content-Disposition": f'inline; filename="{filename}"'}
     )
 
 

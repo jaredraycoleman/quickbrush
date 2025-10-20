@@ -652,12 +652,23 @@ def serve_image(generation_id: str):
     if not generation or not generation.image_data:
         return "Image not found", 404
 
+    # Use generated name if available, otherwise fall back to generation_id
+    import re
+    if generation.image_name:
+        filename = str(generation.image_name)
+        # Sanitize filename (remove invalid characters)
+        filename = re.sub(r'[^\w\s-]', '', filename).strip()
+        filename = re.sub(r'[-\s]+', '-', filename)
+    else:
+        filename = f"generated_{generation_id}"
+    filename = f"{filename}.webp"
+
     # Serve the WebP image
     return send_file(
         BytesIO(generation.image_data), # type: ignore
         mimetype="image/webp",
         as_attachment=False,
-        download_name=f"generated_{generation_id}.webp"
+        download_name=filename
     )
 
 

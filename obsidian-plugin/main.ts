@@ -10,8 +10,8 @@ interface QuickBrushSettings {
 const DEFAULT_SETTINGS: QuickBrushSettings = {
 	apiKey: '',
 	apiUrl: 'https://quickbrush.online/api',
-	imagesFolder: 'quickbrush-images',
-	galleryFolder: 'quickbrush-gallery'
+	imagesFolder: 'Quickbrush/quickbrush-images',
+	galleryFolder: 'Quickbrush/quickbrush-gallery'
 };
 
 interface GenerationOptions {
@@ -28,6 +28,7 @@ interface GenerationResponse {
 	generation_id: string;
 	image_url: string;
 	refined_description: string;
+	image_name?: string;
 	brushstrokes_used: number;
 	brushstrokes_remaining: number;
 	remaining_image_slots: number;
@@ -99,21 +100,34 @@ export default class QuickBrushPlugin extends Plugin {
 
 	openGenerateModal(defaultType?: 'character' | 'scene' | 'creature' | 'item') {
 		if (!this.settings.apiKey) {
-			new Notice('Please set your QuickBrush API key in settings');
+			new Notice('API Key Required: Please set your QuickBrush API key in the plugin settings. Get your key from quickbrush.online.', 6000);
 			return;
 		}
 
 		const activeFile = this.app.workspace.getActiveFile();
 		let initialText = '';
+		let initialImages: string[] = [];
 
 		if (activeFile) {
-			this.app.vault.read(activeFile).then(content => {
+			this.app.vault.read(activeFile).then(async content => {
 				// Extract content without frontmatter
 				initialText = this.extractContentWithoutFrontmatter(content);
-				new GenerateModal(this.app, this, initialText, defaultType).open();
+
+				// Extract first 3 images from the note
+				const imagePaths = this.extractImagePaths(content);
+
+				// Convert images to base64
+				for (const imagePath of imagePaths) {
+					const base64 = await this.resolveImageToBase64(imagePath);
+					if (base64) {
+						initialImages.push(base64);
+					}
+				}
+
+				new GenerateModal(this.app, this, initialText, initialImages, defaultType).open();
 			});
 		} else {
-			new GenerateModal(this.app, this, initialText, defaultType).open();
+			new GenerateModal(this.app, this, initialText, initialImages, defaultType).open();
 		}
 	}
 
@@ -133,12 +147,76 @@ export default class QuickBrushPlugin extends Plugin {
 			.replace(/^[-*+]\s+/gm, '') // Remove list markers
 			.trim();
 
-		// Limit to 4000 characters
-		if (text.length > 4000) {
-			text = text.substring(0, 4000);
+		// Limit to 10000 characters
+		if (text.length > 10000) {
+			text = text.substring(0, 10000);
 		}
 
 		return text;
+	}
+
+	extractImagePaths(content: string): string[] {
+		const images: string[] = [];
+
+		// Extract wiki-link image embeds: ![[image.png]]
+		const wikiImageRegex = /!\[\[([^\]]+\.(png|jpg|jpeg|gif|webp|bmp))\]\]/gi;
+		let match;
+		while ((match = wikiImageRegex.exec(content)) !== null && images.length < 3) {
+			images.push(match[1]);
+		}
+
+		// If we need more, extract markdown image embeds: ![alt](image.png)
+		if (images.length < 3) {
+			const mdImageRegex = /!\[[^\]]*\]\(([^\)]+\.(png|jpg|jpeg|gif|webp|bmp))\)/gi;
+			while ((match = mdImageRegex.exec(content)) !== null && images.length < 3) {
+				images.push(match[1]);
+			}
+		}
+
+		return images;
+	}
+
+	async resolveImageToBase64(imagePath: string): Promise<string | null> {
+		try {
+			// Try to find the file in the vault
+			const file = this.app.metadataCache.getFirstLinkpathDest(imagePath, '');
+			if (!file || !(file instanceof TFile)) {
+				return null;
+			}
+
+			// Read the file as binary
+			const arrayBuffer = await this.app.vault.readBinary(file);
+
+			// Convert to base64
+			const base64 = this.arrayBufferToBase64(arrayBuffer);
+
+			// Determine mime type from extension
+			const ext = file.extension.toLowerCase();
+			const mimeTypes: { [key: string]: string } = {
+				'png': 'image/png',
+				'jpg': 'image/jpeg',
+				'jpeg': 'image/jpeg',
+				'gif': 'image/gif',
+				'webp': 'image/webp',
+				'bmp': 'image/bmp'
+			};
+			const mimeType = mimeTypes[ext] || 'image/png';
+
+			return `data:${mimeType};base64,${base64}`;
+		} catch (error) {
+			console.error(`Failed to resolve image ${imagePath}:`, error);
+			return null;
+		}
+	}
+
+	arrayBufferToBase64(buffer: ArrayBuffer): string {
+		let binary = '';
+		const bytes = new Uint8Array(buffer);
+		const len = bytes.byteLength;
+		for (let i = 0; i < len; i++) {
+			binary += String.fromCharCode(bytes[i]);
+		}
+		return window.btoa(binary);
 	}
 
 	async ensureFolderExists(folderPath: string): Promise<void> {
@@ -159,46 +237,122 @@ export default class QuickBrushPlugin extends Plugin {
 					'Authorization': `Bearer ${this.settings.apiKey}`,
 					'Content-Type': 'application/json'
 				},
-				body: JSON.stringify(options)
+				body: JSON.stringify(options),
+				throw: false // Don't throw on non-2xx status codes
 			});
 
+			// Success case
 			if (response.status === 200) {
 				return response.json;
-			} else if (response.status === 401) {
-				throw new Error('Invalid API key. Please check your settings.');
+			}
+
+			// Error cases - extract the error message from the API response
+			let apiErrorMessage = 'Unknown error';
+			try {
+				const errorData = response.json;
+				apiErrorMessage = errorData.detail || errorData.message || apiErrorMessage;
+			} catch (e) {
+				// Ignore JSON parse errors
+			}
+
+			// Handle specific status codes with helpful messages
+			if (response.status === 401) {
+				throw new Error(`Invalid API Key: ${apiErrorMessage}\n\nPlease check your QuickBrush settings and update your API key from quickbrush.online.`);
 			} else if (response.status === 402) {
-				throw new Error('Insufficient brushstrokes. Please visit quickbrush.online to get more.');
+				throw new Error(`Insufficient Brushstrokes: ${apiErrorMessage}\n\nVisit quickbrush.online to purchase more or upgrade your subscription.`);
 			} else if (response.status === 429) {
-				throw new Error('Rate limit exceeded. Please wait before generating another image.');
+				throw new Error(`Rate Limit Exceeded: ${apiErrorMessage}\n\nPlease wait before trying again. Limits: 1 per 10 seconds, 50 per hour.`);
+			} else if (response.status === 422) {
+				// Validation error - try to extract field-specific details
+				let errorDetails = apiErrorMessage;
+				try {
+					const errorData = response.json;
+					if (errorData.detail && Array.isArray(errorData.detail)) {
+						errorDetails = errorData.detail.map((e: any) => {
+							const field = e.loc ? e.loc.join('.') : 'field';
+							const msg = e.msg || e.message || 'validation error';
+							return `${field}: ${msg}`;
+						}).join('\n');
+					}
+				} catch (e) {
+					// Use apiErrorMessage as fallback
+				}
+				throw new Error(`Validation Error: ${errorDetails}\n\nPlease check your inputs and try again.`);
 			} else {
-				throw new Error(`Generation failed: ${response.json.message || 'Unknown error'}`);
+				throw new Error(`Generation Failed (${response.status}): ${apiErrorMessage}\n\nIf this persists, please contact support at quickbrush.online.`);
 			}
 		} catch (error) {
-			if (error instanceof Error) {
+			// If it's already a formatted error from above, re-throw it
+			if (error instanceof Error && error.message.includes(':')) {
 				throw error;
 			}
-			throw new Error('Failed to connect to QuickBrush API');
+
+			// Network or unexpected errors
+			console.error('QuickBrush API error:', error);
+			throw new Error('Network Error: Failed to connect to QuickBrush API. Please check your internet connection and API URL in settings.');
 		}
 	}
 
 	async downloadImage(generationId: string): Promise<ArrayBuffer> {
 		const url = `${this.settings.apiUrl}/image/${generationId}`;
 
-		const response = await requestUrl({
-			url,
-			method: 'GET',
-			headers: {
-				'Authorization': `Bearer ${this.settings.apiKey}`
-			}
-		});
+		try {
+			const response = await requestUrl({
+				url,
+				method: 'GET',
+				headers: {
+					'Authorization': `Bearer ${this.settings.apiKey}`
+				},
+				throw: false // Don't throw on non-2xx status codes
+			});
 
-		return response.arrayBuffer;
+			// Success case
+			if (response.status === 200) {
+				return response.arrayBuffer;
+			}
+
+			// Error cases - extract error message from API
+			let apiErrorMessage = 'Unknown error';
+			try {
+				const errorData = response.json;
+				apiErrorMessage = errorData.detail || errorData.message || apiErrorMessage;
+			} catch (e) {
+				// Ignore JSON parse errors
+			}
+
+			// Handle specific status codes
+			if (response.status === 404) {
+				throw new Error(`Image Not Found: ${apiErrorMessage}\n\nThe generated image could not be found. It may have been deleted or exceeded the storage limit.`);
+			} else if (response.status === 401) {
+				throw new Error(`Invalid API Key: ${apiErrorMessage}\n\nUnable to download image. Please check your API key in settings.`);
+			} else {
+				throw new Error(`Download Failed (${response.status}): ${apiErrorMessage}\n\nPlease try again.`);
+			}
+		} catch (error) {
+			// If it's already a formatted error from above, re-throw it
+			if (error instanceof Error && error.message.includes(':')) {
+				throw error;
+			}
+
+			// Network or unexpected errors
+			console.error('QuickBrush download error:', error);
+			throw new Error('Network Error: Failed to download image from QuickBrush. Please check your internet connection.');
+		}
 	}
 
-	async saveImageToVault(generationId: string, imageData: ArrayBuffer): Promise<string> {
+	async saveImageToVault(generationId: string, imageData: ArrayBuffer, imageName?: string): Promise<string> {
 		await this.ensureFolderExists(this.settings.imagesFolder);
 
-		const filename = `quickbrush-${generationId}.webp`;
+		// Use image name if available, otherwise use generation ID
+		let filename: string;
+		if (imageName) {
+			// Sanitize the image name for use as filename
+			const sanitized = imageName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+			filename = `${sanitized}.webp`;
+		} else {
+			filename = `quickbrush-${generationId}.webp`;
+		}
+
 		const filepath = `${this.settings.imagesFolder}/${filename}`;
 
 		await this.app.vault.createBinary(filepath, imageData);
@@ -214,14 +368,25 @@ export default class QuickBrushPlugin extends Plugin {
 		prompt: string,
 		quality: string,
 		aspectRatio: string,
-		brushstrokesUsed: number
+		brushstrokesUsed: number,
+		imageName?: string
 	): Promise<void> {
 		await this.ensureFolderExists(this.settings.galleryFolder);
 
-		// Create timestamp-based filename
+		// Create timestamp
 		const now = new Date();
 		const timestamp = this.formatTimestamp(now);
-		const noteFilename = `${timestamp}.md`;
+
+		// Create filename with image name if available
+		let noteFilename: string;
+		if (imageName) {
+			// Sanitize the image name for use as filename
+			const sanitized = imageName.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+			noteFilename = `${sanitized} - ${timestamp}.md`;
+		} else {
+			noteFilename = `${timestamp}.md`;
+		}
+
 		const notePath = `${this.settings.galleryFolder}/${noteFilename}`;
 
 		// Create frontmatter properties
@@ -230,7 +395,8 @@ export default class QuickBrushPlugin extends Plugin {
 			generation_type: generationType,
 			quality: quality,
 			aspect_ratio: aspectRatio,
-			brushstrokes_used: brushstrokesUsed
+			brushstrokes_used: brushstrokesUsed,
+			image: `[[${filepath}]]`,
 		};
 
 		// Build note content
@@ -282,6 +448,7 @@ export default class QuickBrushPlugin extends Plugin {
 class GenerateModal extends Modal {
 	plugin: QuickBrushPlugin;
 	initialText: string;
+	initialImages: string[];
 	defaultType?: string;
 
 	textInput: TextAreaComponent;
@@ -289,12 +456,15 @@ class GenerateModal extends Modal {
 	typeDropdown: DropdownComponent;
 	qualityDropdown: DropdownComponent;
 	aspectRatioDropdown: DropdownComponent;
+	referenceImages: string[];
 
-	constructor(app: App, plugin: QuickBrushPlugin, initialText: string, defaultType?: string) {
+	constructor(app: App, plugin: QuickBrushPlugin, initialText: string, initialImages: string[], defaultType?: string) {
 		super(app);
 		this.plugin = plugin;
 		this.initialText = initialText;
+		this.initialImages = initialImages;
 		this.defaultType = defaultType;
+		this.referenceImages = [...initialImages];
 	}
 
 	onOpen() {
@@ -342,7 +512,7 @@ class GenerateModal extends Modal {
 		// Artistic Prompt
 		new Setting(contentEl)
 			.setName('Artistic Prompt (Optional)')
-			.setDesc('Additional styling or mood guidance (max 500 characters)')
+			.setDesc('Additional styling or mood guidance (max 1000 characters)')
 			.addTextArea(text => {
 				this.promptInput = text;
 				text
@@ -350,6 +520,82 @@ class GenerateModal extends Modal {
 					.inputEl.rows = 3;
 				text.inputEl.style.width = '100%';
 			});
+
+		// Reference Images
+		const refImagesSetting = new Setting(contentEl)
+			.setName('Reference Images (Optional)')
+			.setDesc(`${this.referenceImages.length} of 3 images selected`)
+			.addButton(button => button
+				.setButtonText('Add Image')
+				.setDisabled(this.referenceImages.length >= 3)
+				.onClick(async () => {
+					await this.selectReferenceImage(updateRefImagesDisplay);
+				}));
+
+		const refImagesContainer = contentEl.createDiv({ cls: 'quickbrush-ref-images' });
+		refImagesContainer.style.display = 'flex';
+		refImagesContainer.style.flexWrap = 'wrap';
+		refImagesContainer.style.gap = '10px';
+		refImagesContainer.style.marginBottom = '20px';
+
+		const updateRefImagesDisplay = () => {
+			refImagesContainer.empty();
+			refImagesSetting.setDesc(`${this.referenceImages.length} of 3 images selected`);
+
+			// Update button state
+			const addButton = refImagesSetting.controlEl.querySelector('button');
+			if (addButton) {
+				(addButton as HTMLButtonElement).disabled = this.referenceImages.length >= 3;
+			}
+
+			this.referenceImages.forEach((imgData, index) => {
+				const imgWrapper = refImagesContainer.createDiv({ cls: 'ref-image-wrapper' });
+				imgWrapper.style.position = 'relative';
+				imgWrapper.style.width = '80px';
+				imgWrapper.style.height = '80px';
+
+				const img = imgWrapper.createEl('img');
+				img.src = imgData;
+				img.style.width = '100%';
+				img.style.height = '100%';
+				img.style.objectFit = 'cover';
+				img.style.borderRadius = '4px';
+
+				const removeBtn = imgWrapper.createEl('button', { cls: 'ref-image-remove' });
+				removeBtn.textContent = '×';
+				removeBtn.style.position = 'absolute';
+				removeBtn.style.top = '2px';
+				removeBtn.style.right = '2px';
+				removeBtn.style.width = '20px';
+				removeBtn.style.height = '20px';
+				removeBtn.style.borderRadius = '50%';
+				removeBtn.style.background = 'var(--background-modifier-error)';
+				removeBtn.style.color = 'white';
+				removeBtn.style.border = 'none';
+				removeBtn.style.cursor = 'pointer';
+				removeBtn.style.fontSize = '14px';
+				removeBtn.style.lineHeight = '1';
+
+				removeBtn.addEventListener('click', () => {
+					this.referenceImages.splice(index, 1);
+					updateRefImagesDisplay();
+				});
+			});
+
+			if (this.referenceImages.length === 0) {
+				const note = refImagesContainer.createDiv();
+				note.style.fontSize = '0.9em';
+				note.style.color = 'var(--text-muted)';
+				note.textContent = 'No reference images selected';
+			} else if (this.initialImages.length > 0 && this.referenceImages.length === this.initialImages.length) {
+				const note = refImagesContainer.createDiv();
+				note.style.fontSize = '0.9em';
+				note.style.color = 'var(--text-muted)';
+				note.textContent = `${this.initialImages.length} image(s) auto-selected from note`;
+			}
+		};
+
+		updateRefImagesDisplay();
 
 		// Quality
 		new Setting(contentEl)
@@ -397,19 +643,70 @@ class GenerateModal extends Modal {
 		});
 	}
 
+	async selectReferenceImage(updateDisplay: () => void) {
+		if (this.referenceImages.length >= 3) {
+			new Notice('Maximum Reference Images: You can only select up to 3 reference images.', 4000);
+			return;
+		}
+
+		// Create a file input element
+		const input = document.createElement('input');
+		input.type = 'file';
+		input.accept = 'image/*';
+		input.multiple = false;
+
+		input.onchange = async (e) => {
+			const file = (e.target as HTMLInputElement).files?.[0];
+			if (!file) return;
+
+			// Check if it's an image
+			if (!file.type.startsWith('image/')) {
+				new Notice('Invalid File Type: Please select an image file (PNG, JPG, GIF, WebP, etc.).', 5000);
+				return;
+			}
+
+			// Check file size (warn if > 10MB)
+			const maxSize = 10 * 1024 * 1024; // 10MB
+			if (file.size > maxSize) {
+				new Notice('Large File Warning: This image is quite large and may slow down generation. Consider using a smaller image.', 6000);
+			}
+
+			try {
+				// Read the file as base64
+				const reader = new FileReader();
+				reader.onload = (event) => {
+					const base64 = event.target?.result as string;
+					this.referenceImages.push(base64);
+					updateDisplay();
+					new Notice('Reference image added successfully', 3000);
+				};
+				reader.onerror = () => {
+					new Notice('File Read Error: Unable to read the selected image file. Please try a different file.', 5000);
+				};
+				reader.readAsDataURL(file);
+			} catch (error) {
+				new Notice('Error Loading Image: An unexpected error occurred while loading the image. Please try again.', 5000);
+				console.error('QuickBrush image load error:', error);
+			}
+		};
+
+		input.click();
+	}
+
 	async handleGenerate() {
 		const text = this.textInput.getValue().trim();
 		if (!text) {
-			new Notice('Please enter a description');
+			new Notice('Description Required: Please enter a description of what you want to generate.', 5000);
 			return;
 		}
 
 		const options: GenerationOptions = {
 			text: text.substring(0, 10000),
-			prompt: this.promptInput.getValue().substring(0, 500) || undefined,
+			prompt: this.promptInput.getValue().substring(0, 1000) || undefined,
 			generation_type: this.typeDropdown.getValue() as any,
 			quality: this.qualityDropdown.getValue() as any,
-			aspect_ratio: this.aspectRatioDropdown.getValue() as any
+			aspect_ratio: this.aspectRatioDropdown.getValue() as any,
+			reference_image_paths: this.referenceImages.length > 0 ? this.referenceImages : undefined
 		};
 
 		this.close();
@@ -425,10 +722,10 @@ class GenerateModal extends Modal {
 			const imageData = await this.plugin.downloadImage(result.generation_id);
 			notice.setMessage('Saving image...');
 
-			// Save to vault
-			const filepath = await this.plugin.saveImageToVault(result.generation_id, imageData);
+			// Save to vault with image name
+			const filepath = await this.plugin.saveImageToVault(result.generation_id, imageData, result.image_name);
 
-			// Create gallery note
+			// Create gallery note with image name
 			await this.plugin.createGalleryNote(
 				filepath,
 				options.generation_type,
@@ -437,7 +734,8 @@ class GenerateModal extends Modal {
 				options.prompt || '',
 				options.quality,
 				options.aspect_ratio,
-				result.brushstrokes_used
+				result.brushstrokes_used,
+				result.image_name
 			);
 
 			notice.hide();
@@ -446,9 +744,14 @@ class GenerateModal extends Modal {
 		} catch (error) {
 			notice.hide();
 			if (error instanceof Error) {
-				new Notice(`Error: ${error.message}`);
+				// Show detailed error message
+				new Notice(error.message, 8000); // Show for 8 seconds
+
+				// Log full error for debugging
+				console.error('QuickBrush generation error:', error);
 			} else {
-				new Notice('Failed to generate image');
+				new Notice('Unexpected Error: Failed to generate image. Please try again or contact support.', 6000);
+				console.error('QuickBrush unknown error:', error);
 			}
 		}
 	}
@@ -502,7 +805,7 @@ class QuickBrushSettingTab extends PluginSettingTab {
 			.setName('Images Folder')
 			.setDesc('Folder to save generated images')
 			.addText(text => text
-				.setPlaceholder('quickbrush-images')
+				.setPlaceholder('Quickbrush/quickbrush-images')
 				.setValue(this.plugin.settings.imagesFolder)
 				.onChange(async (value) => {
 					this.plugin.settings.imagesFolder = value;
@@ -514,7 +817,7 @@ class QuickBrushSettingTab extends PluginSettingTab {
 			.setName('Gallery Folder')
 			.setDesc('Folder to save gallery notes with image metadata')
 			.addText(text => text
-				.setPlaceholder('quickbrush-gallery')
+				.setPlaceholder('Quickbrush/quickbrush-gallery')
 				.setValue(this.plugin.settings.galleryFolder)
 				.onChange(async (value) => {
 					this.plugin.settings.galleryFolder = value;

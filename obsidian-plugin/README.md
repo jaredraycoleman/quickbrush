@@ -52,8 +52,21 @@ Generate AI-powered images directly from your Obsidian notes using QuickBrush. C
      - "QuickBrush: Generate Item Image"
 
 3. The plugin will automatically extract text from your note (excluding frontmatter)
-4. Adjust the description, type, quality, and aspect ratio as needed
-5. Click "Generate"
+4. The first 3 images embedded in your note will be automatically selected as reference images
+5. You can add or remove reference images using the "Add Image" button
+6. Adjust the description, type, quality, and aspect ratio as needed
+7. Click "Generate"
+
+### Reference Images
+
+The plugin supports up to 3 reference images to guide the generation:
+
+- **Auto-Selected**: The first 3 images from your active note are automatically extracted
+- **Manual Selection**: Click "Add Image" to select additional images from your device
+- **Remove Images**: Click the × button on any thumbnail to remove it
+- **Supported Formats**: PNG, JPG, JPEG, GIF, WebP, BMP
+
+Reference images help maintain consistency with existing artwork or provide visual style guidance.
 
 ### Generation Options
 

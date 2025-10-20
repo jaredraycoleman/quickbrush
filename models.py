@@ -460,6 +460,7 @@ class Generation(Document):
     image_size = StringField(default="1024x1024")
     image_data = BinaryField()  # WebP image stored as binary data
     image_format = StringField(default="webp")  # Always webp
+    image_name = StringField()  # Short generated name for the image (e.g., "Elven Warrior")
 
     # Legacy fields (deprecated but kept for backward compatibility)
     image_url = StringField()  # Deprecated

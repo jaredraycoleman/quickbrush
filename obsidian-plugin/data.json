@@ -1,6 +1,6 @@
 {
-  "apiKey": "qb_A158MK478Gh4mlsquXlzyg:BpvtB0roEjJn_M1pbQWYtFRtoUduDYGJnqxbLosKBDc",
-  "apiUrl": "https://quickbrush.online/api",
-  "imagesFolder": "quickbrush-images",
-  "galleryFolder": "quickbrush-gallery"
+  "apiKey": "qb_rivg-YC89Yvn8VbKVOVyng:i0OntYCSMtk0vj7O7o2-AMuqFNZjLUmF2fKLBLMZstY",
+  "apiUrl": "http://localhost:5000/api",
+  "imagesFolder": "Quickbrush/quickbrush-images",
+  "galleryFolder": "Quickbrush/quickbrush-gallery"
 }

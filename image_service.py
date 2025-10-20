@@ -1,7 +1,7 @@
 """
 Image storage service for Quickbrush.
 
-Manages image storage in MongoDB with a 100-image limit per user.
+Manages image storage in MongoDB with a configurable image limit per user.
 All images are stored as WebP format.
 """
 
@@ -9,16 +9,17 @@ from models import User, Generation
 from datetime import datetime, timezone
 from typing import Optional
 import logging
+from config import Config
 
 logger = logging.getLogger(__name__)
 
-# Maximum number of images to store per user
-MAX_IMAGES_PER_USER = 100
+# Maximum number of images to store per user (from config)
+MAX_IMAGES_PER_USER = Config.MAX_IMAGES_PER_USER
 
 
 def enforce_image_limit(user: User) -> int:
     """
-    Enforce the 100-image limit per user by deleting oldest generations.
+    Enforce the per-user image limit by deleting oldest generations.
 
     Args:
         user: User object
@@ -73,11 +74,12 @@ def save_generation_with_image(
     brushstrokes_used: int,
     aspect_ratio: Optional[str] = None,
     source: str = "web",
-    api_key=None
+    api_key=None,
+    image_name: Optional[str] = None
 ) -> Generation:
     """
     Save a generation with image data to MongoDB.
-    Automatically enforces the 100-image limit.
+    Automatically enforces the per-user image limit.
 
     Args:
         user: User object
@@ -108,6 +110,7 @@ def save_generation_with_image(
         image_size=image_size,
         image_data=image_data,
         image_format="webp",
+        image_name=image_name,
         brushstrokes_used=brushstrokes_used,
         status="completed",
         source=source,
@@ -116,7 +119,7 @@ def save_generation_with_image(
     )
     generation.save()
 
-    # Enforce the 100-image limit
+    # Enforce the per-user image limit
     enforce_image_limit(user)
 
     return generation

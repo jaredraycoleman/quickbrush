@@ -96,3 +96,14 @@ class Config:
             "seconds_window": cls.RATE_LIMIT_SECONDS,  # per 10 seconds (default)
             "hourly_limit": cls.RATE_LIMIT_PER_HOUR,  # 50 generations per hour (default)
         }
+
+    # ========================================
+    # IMAGE GENERATION CONFIGURATION
+    # ========================================
+
+    # Maximum number of images to store per user in the library
+    MAX_IMAGES_PER_USER = int(os.getenv("MAX_IMAGES_PER_USER", "25"))
+
+    # Maximum character limits for generation requests
+    MAX_TEXT_LENGTH = int(os.getenv("MAX_TEXT_LENGTH", "10000"))
+    MAX_PROMPT_LENGTH = int(os.getenv("MAX_PROMPT_LENGTH", "1000"))

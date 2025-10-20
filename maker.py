@@ -8,6 +8,8 @@ import os
 from io import BytesIO
 import tempfile
 
+from pydantic import Field, BaseModel
+
 client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
 
 def token_cost(quality: str) -> int:
@@ -27,6 +29,10 @@ def convert_for_openai(path: pathlib.Path, format: str) -> pathlib.Path:
     with tempfile.NamedTemporaryFile(delete=False, suffix=f".{format}") as temp_file:
         image.save(temp_file, format=format.upper())
         return pathlib.Path(temp_file.name)
+    
+class Description(BaseModel):
+    text: str = Field(..., description="The physical description of the subject.")
+    name: str = Field(..., description="A short name or title for the subject.")
 
 IMAGE_SIZE = Literal['256x256', '512x512', '1024x1024', '1536x1024', '1024x1536', 'auto']
 BACKGROUND = Literal["transparent", "opaque", "auto"]
@@ -37,9 +43,9 @@ class ImageGenerator(ABC):
     @abstractmethod
     def get_prompt(self, description: str) -> str:
         raise NotImplementedError
-    
+
     @abstractmethod
-    def get_description(self, text: str, prompt: str, reference_images: Optional[List[pathlib.Path]] = None) -> str:
+    def get_description(self, text: str, prompt: str, reference_images: Optional[List[pathlib.Path]] = None) -> Description:
         """Extract a description from the provided text. The prompt provides context for the description to be generated (e.g., style change, specific outfit, etc.).
 
         Args:
@@ -48,15 +54,91 @@ class ImageGenerator(ABC):
             reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
 
         Returns:
-            str: A concise description.
+            Description: A Description object containing the text description and a short name/title.
         """
         raise NotImplementedError
+
+    def _generate_description_with_gpt(
+        self,
+        system_prompt: str,
+        user_text: str,
+        context_prompt: str,
+        description_label: str,
+        reference_images: Optional[List[pathlib.Path]] = None
+    ) -> Description:
+        """
+        Shared helper method to generate descriptions using GPT-4o.
+
+        Args:
+            system_prompt: The system message defining the assistant's role
+            user_text: The user's input text describing the subject
+            context_prompt: Additional context or styling prompt
+            description_label: Label for the description section (e.g., "character", "scene", "creature", "item")
+            reference_images: Optional list of reference image paths
+
+        Returns:
+            Description: A Description object with text and name
+        """
+        # Build messages with optional reference images
+        messages: List[Dict[str, Union[str, List[Dict[str, str]]]]] = [
+            {
+                "role": "system",
+                "content": system_prompt
+            }
+        ]
+
+        # Build user message content
+        user_content = []
+
+        # Add reference images first if provided
+        if reference_images:
+            for img_path in reference_images:
+                with open(img_path, "rb") as img_file:
+                    img_bytes = img_file.read()
+                    base64_image = b64encode(img_bytes).decode('utf-8')
+                    user_content.append({
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:image/jpeg;base64,{base64_image}",
+                        },
+                    })
+
+        # Add text prompt
+        prompt_text = context_prompt + "\n\n" if context_prompt else ""
+        user_content.append({
+            "type": "text",
+            "text": f"{prompt_text}{description_label}:\n{user_text}"
+        })
+
+        messages.append({
+            "role": "user",
+            "content": user_content
+        })
+
+        response = client.beta.chat.completions.parse(
+            model="gpt-4o",
+            messages=messages,  # type: ignore
+            response_format=Description
+        )
+
+
+        if not response.choices or not response.choices[0]:
+            raise ValueError("No response from OpenAI API.")
+        try:
+            description = response.choices[0].message.parsed
+            if not description:
+                raise ValueError("Parsed description is None.")
+            return description
+        except Exception:
+            raise ValueError("Failed to parse response into Description model.")
+        if not response.choices[0].message.content:
+            raise ValueError("No content in the response message.")
     
     def generate_image(self,
                        description: str,
                        reference_images: Optional[List[pathlib.Path]] = None,
                        model: str = "gpt-image-1-mini",
-                       image_size: IMAGE_SIZE = None,
+                       image_size: IMAGE_SIZE | None = None,
                        quality: QUALITY = "medium",
                        background: BACKGROUND = "transparent") -> bytes:
         """
@@ -127,7 +209,7 @@ class CharacterImageGenerator(ImageGenerator):
         )
         return prompt
     
-    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT, reference_images: Optional[List[pathlib.Path]] = None) -> str:
+    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT, reference_images: Optional[List[pathlib.Path]] = None) -> Description:
         """
         Extract a physical description from the provided text.
 
@@ -137,64 +219,26 @@ class CharacterImageGenerator(ImageGenerator):
             reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
 
         Returns:
-            str: A concise physical description of the character.
+            Description: A Description object with text and name.
         """
-        # Build messages with optional reference images
-        messages: List[Dict[str, Union[str, List[Dict[str, str]]]]] = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a helpful assistant that creates short but detailed character descriptions "
-                    "based on the prompt provided and a general description of the character's appearance. "
-                    "Always give preference to the prompt over the general description (e.g., the "
-                    "prompt might ask them to wear a specific outfit or have a certain hairstyle while"
-                    "the general description describes them as typically wearing a different outfit). "
-                    "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
-                    "Focus on the physical description and do not include any names (even the character's name), personality traits, lore, etc. "
-                )
-            }
-        ]
-
-        # Build user message content
-        user_content = []
-
-        # Add reference images first if provided
-        if reference_images:
-            for img_path in reference_images:
-                with open(img_path, "rb") as img_file:
-                    img_bytes = img_file.read()
-                    base64_image = b64encode(img_bytes).decode('utf-8')
-                    user_content.append({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                        },
-                    })
-
-        # Add text prompt
-        user_content.append({
-            "type": "text",
-            "text": (
-                prompt + "\n\n"
-                "Overall character description:\n" + text
-            )
-        })
-
-        messages.append({
-            "role": "user",
-            "content": user_content
-        })
-
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages # type: ignore
+        system_prompt = (
+            "You are a helpful assistant that creates short but detailed character descriptions "
+            "based on the prompt provided and a general description of the character. "
+            "Always give preference to the prompt over the general description (e.g., the "
+            "prompt might ask them to wear a specific outfit or have a certain hairstyle while "
+            "the general description describes them as typically wearing a different outfit). "
+            "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
+            "Focus on the physical description and do not include any names (even the character's name), personality traits, lore, etc. "
+            "You must respond with valid JSON in this exact format: {\"text\": \"detailed physical description\", \"name\": \"short name or title\"}"
         )
-        if not response.choices or not response.choices[0].message:
-            raise ValueError("No response from OpenAI API.")
-        if not response.choices[0].message.content:
-            raise ValueError("No content in the response message.")
-        description = response.choices[0].message.content.strip()
-        return description
+
+        return self._generate_description_with_gpt(
+            system_prompt=system_prompt,
+            user_text=text,
+            context_prompt=prompt,
+            description_label="Overall character description",
+            reference_images=reference_images
+        )
     
 class SceneImageGenerator(ImageGenerator):
     def get_prompt(self, description: str) -> str:
@@ -210,7 +254,7 @@ class SceneImageGenerator(ImageGenerator):
         )
         return prompt
     
-    def get_description(self, text: str, prompt: str = "", reference_images: Optional[List[pathlib.Path]] = None) -> str:
+    def get_description(self, text: str, prompt: str = "", reference_images: Optional[List[pathlib.Path]] = None) -> Description:
         """
         Extract a description for the scene from the provided text.
 
@@ -220,64 +264,26 @@ class SceneImageGenerator(ImageGenerator):
             reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
 
         Returns:
-            str: A concise description of the scene.
+            Description: A Description object with text and name.
         """
-        # Build messages with optional reference images
-        messages: List[Dict[str, Union[str, List[Dict[str, str]]]]] = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a helpful assistant that creates short but detailed scene descriptions "
-                    "based on the prompt provided and a general description of the scene. "
-                    "Always give preference to the prompt over the general description (e.g., the "
-                    "prompt might ask for a specific setting or time of day while the general description "
-                    "describes a different setting). This will be used as a prompt for generating an image, "
-                    "so be as consistent and descriptive as possible. "
-                    "Focus on the physical description and do not include any names, personality traits, lore, etc. "
-                )
-            }
-        ]
-
-        # Build user message content
-        user_content = []
-
-        # Add reference images first if provided
-        if reference_images:
-            for img_path in reference_images:
-                with open(img_path, "rb") as img_file:
-                    img_bytes = img_file.read()
-                    base64_image = b64encode(img_bytes).decode('utf-8')
-                    user_content.append({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                        },
-                    })
-
-        # Add text prompt
-        user_content.append({
-            "type": "text",
-            "text": (
-                prompt + "\n\n"
-                "Overall scene description:\n" + text
-            )
-        })
-
-        messages.append({
-            "role": "user",
-            "content": user_content
-        })
-
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages  # type: ignore
+        system_prompt = (
+            "You are a helpful assistant that creates short but detailed scene descriptions "
+            "based on the prompt provided and a general description of the scene. "
+            "Always give preference to the prompt over the general description (e.g., the "
+            "prompt might ask for a specific setting or time of day while the general description "
+            "describes a different setting). This will be used as a prompt for generating an image, "
+            "so be as consistent and descriptive as possible. "
+            "Focus on the physical description and do not include any names, personality traits, lore, etc. "
+            "You must respond with valid JSON in this exact format: {\"text\": \"detailed scene description\", \"name\": \"short name or title for the scene\"}"
         )
-        if not response.choices or not response.choices[0].message:
-            raise ValueError("No response from OpenAI API.")
-        if not response.choices[0].message.content:
-            raise ValueError("No content in the response message.")
-        description = response.choices[0].message.content.strip()
-        return description
+
+        return self._generate_description_with_gpt(
+            system_prompt=system_prompt,
+            user_text=text,
+            context_prompt=prompt,
+            description_label="Overall scene description",
+            reference_images=reference_images
+        )
 
 class CreatureImageGenerator(ImageGenerator):
     DEFAULT_CONTEXT_PROMPT = "Generate a physical description of a creature."
@@ -293,7 +299,7 @@ class CreatureImageGenerator(ImageGenerator):
         )
         return prompt
     
-    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT, reference_images: Optional[List[pathlib.Path]] = None) -> str:
+    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT, reference_images: Optional[List[pathlib.Path]] = None) -> Description:
         """
         Extract a physical description from the provided text.
 
@@ -302,64 +308,26 @@ class CreatureImageGenerator(ImageGenerator):
             prompt (str): The context prompt for the description.
             reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
         Returns:
-            str: A concise physical description of the creature.
+            Description: A Description object with text and name.
         """
-        # Build messages with optional reference images
-        messages: List[Dict[str, Union[str, List[Dict[str, str]]]]] = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a helpful assistant that creates short but detailed creature descriptions "
-                    "based on the prompt provided and a general description of the creature's appearance. "
-                    "Always give preference to the prompt over the general description (e.g., the "
-                    "prompt might ask them to have a specific feature or color while the general description "
-                    "describes them as typically having different features). "
-                    "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
-                    "Focus on the physical description and do not include any names (even the creature's name), personality traits, lore, etc. "
-                )
-            }
-        ]
-
-        # Build user message content
-        user_content = []
-
-        # Add reference images first if provided
-        if reference_images:
-            for img_path in reference_images:
-                with open(img_path, "rb") as img_file:
-                    img_bytes = img_file.read()
-                    base64_image = b64encode(img_bytes).decode('utf-8')
-                    user_content.append({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                        },
-                    })
-
-        # Add text prompt
-        user_content.append({
-            "type": "text",
-            "text": (
-                prompt + "\n\n"
-                "Overall creature description:\n" + text
-            )
-        })
-
-        messages.append({
-            "role": "user",
-            "content": user_content
-        })
-
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages  # type: ignore
+        system_prompt = (
+            "You are a helpful assistant that creates short but detailed creature descriptions "
+            "based on the prompt provided and a general description of the creature's appearance. "
+            "Always give preference to the prompt over the general description (e.g., the "
+            "prompt might ask them to have a specific feature or color while the general description "
+            "describes them as typically having different features). "
+            "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
+            "Focus on the physical description and do not include any names (even the creature's name), personality traits, lore, etc. "
+            "You must respond with valid JSON in this exact format: {\"text\": \"detailed creature description\", \"name\": \"short name or title for the creature\"}"
         )
-        if not response.choices or not response.choices[0].message:
-            raise ValueError("No response from OpenAI API.")
-        if not response.choices[0].message.content:
-            raise ValueError("No content in the response message.")
-        description = response.choices[0].message.content.strip()
-        return description
+
+        return self._generate_description_with_gpt(
+            system_prompt=system_prompt,
+            user_text=text,
+            context_prompt=prompt,
+            description_label="Overall creature description",
+            reference_images=reference_images
+        )
     
 class ItemImageGenerator(ImageGenerator):
     DEFAULT_CONTEXT_PROMPT = "Generate a physical description of the item."
@@ -374,7 +342,7 @@ class ItemImageGenerator(ImageGenerator):
         )
         return prompt
     
-    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT, reference_images: Optional[List[pathlib.Path]] = None) -> str:
+    def get_description(self, text: str, prompt: str = DEFAULT_CONTEXT_PROMPT, reference_images: Optional[List[pathlib.Path]] = None) -> Description:
         """
         Extract a physical description from the provided text.
 
@@ -383,61 +351,23 @@ class ItemImageGenerator(ImageGenerator):
             prompt (str): The context prompt for the description.
             reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
         Returns:
-            str: A concise physical description of the item.
+            Description: A Description object with text and name.
         """
-        # Build messages with optional reference images
-        messages: List[Dict[str, Union[str, List[Dict[str, str]]]]] = [
-            {
-                "role": "system",
-                "content": (
-                    "You are a helpful assistant that creates short but detailed item descriptions "
-                    "based on the prompt provided and a general description of the item's appearance. "
-                    "Always give preference to the prompt over the general description (e.g., the "
-                    "prompt might ask for a specific material or design while the general description "
-                    "describes it as typically having different features). "
-                    "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
-                    "Only relate the physical description of the item and do not include any names (even of the item itself), lore, personality, etc. "
-                )
-            }
-        ]
-
-        # Build user message content
-        user_content = []
-
-        # Add reference images first if provided
-        if reference_images:
-            for img_path in reference_images:
-                with open(img_path, "rb") as img_file:
-                    img_bytes = img_file.read()
-                    base64_image = b64encode(img_bytes).decode('utf-8')
-                    user_content.append({
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{base64_image}",
-                        },
-                    })
-
-        # Add text prompt
-        user_content.append({
-            "type": "text",
-            "text": (
-                prompt + "\n\n"
-                "General item description:\n" + text
-            )
-        })
-
-        messages.append({
-            "role": "user",
-            "content": user_content
-        })
-
-        response = client.chat.completions.create(
-            model="gpt-4o",
-            messages=messages  # type: ignore
+        system_prompt = (
+            "You are a helpful assistant that creates short but detailed item descriptions "
+            "based on the prompt provided and a general description of the item's appearance. "
+            "Always give preference to the prompt over the general description (e.g., the "
+            "prompt might ask for a specific material or design while the general description "
+            "describes it as typically having different features). "
+            "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
+            "Only relate the physical description of the item and do not include any names (even of the item itself), lore, personality, etc. "
+            "You must respond with valid JSON in this exact format: {\"text\": \"detailed item description\", \"name\": \"short name or title for the item\"}"
         )
-        if not response.choices or not response.choices[0].message:
-            raise ValueError("No response from OpenAI API.")
-        if not response.choices[0].message.content:
-            raise ValueError("No content in the response message.")
-        description = response.choices[0].message.content.strip()
-        return description
+
+        return self._generate_description_with_gpt(
+            system_prompt=system_prompt,
+            user_text=text,
+            context_prompt=prompt,
+            description_label="General item description",
+            reference_images=reference_images
+        )
