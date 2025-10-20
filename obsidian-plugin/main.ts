@@ -3,15 +3,13 @@ import { App, Plugin, PluginSettingTab, Setting, Notice, TFile, TFolder, Modal, 
 interface QuickBrushSettings {
 	apiKey: string;
 	apiUrl: string;
-	imagesFolder: string;
-	galleryFolder: string;
+	quickbrushFolder: string;
 }
 
 const DEFAULT_SETTINGS: QuickBrushSettings = {
 	apiKey: '',
 	apiUrl: 'https://quickbrush.online/api',
-	imagesFolder: 'Quickbrush/quickbrush-images',
-	galleryFolder: 'Quickbrush/quickbrush-gallery'
+	quickbrushFolder: 'Quickbrush'
 };
 
 interface GenerationOptions {
@@ -44,6 +42,19 @@ interface UserInfo {
 
 export default class QuickBrushPlugin extends Plugin {
 	settings: QuickBrushSettings;
+
+	// Helper methods to get derived folder paths
+	getImagesFolder(): string {
+		return `${this.settings.quickbrushFolder}/quickbrush-images`;
+	}
+
+	getGalleryFolder(): string {
+		return `${this.settings.quickbrushFolder}/quickbrush-gallery`;
+	}
+
+	getGenerationsBasePath(): string {
+		return `${this.settings.quickbrushFolder}/quickbrush-generations.base`;
+	}
 
 	async onload() {
 		await this.loadSettings();
@@ -341,7 +352,8 @@ export default class QuickBrushPlugin extends Plugin {
 	}
 
 	async saveImageToVault(generationId: string, imageData: ArrayBuffer, imageName?: string): Promise<string> {
-		await this.ensureFolderExists(this.settings.imagesFolder);
+		const imagesFolder = this.getImagesFolder();
+		await this.ensureFolderExists(imagesFolder);
 
 		// Use image name if available, otherwise use generation ID
 		let filename: string;
@@ -353,7 +365,7 @@ export default class QuickBrushPlugin extends Plugin {
 			filename = `quickbrush-${generationId}.webp`;
 		}
 
-		const filepath = `${this.settings.imagesFolder}/${filename}`;
+		const filepath = `${imagesFolder}/${filename}`;
 
 		await this.app.vault.createBinary(filepath, imageData);
 
@@ -371,7 +383,11 @@ export default class QuickBrushPlugin extends Plugin {
 		brushstrokesUsed: number,
 		imageName?: string
 	): Promise<void> {
-		await this.ensureFolderExists(this.settings.galleryFolder);
+		const galleryFolder = this.getGalleryFolder();
+		await this.ensureFolderExists(galleryFolder);
+
+		// Ensure the generations base file exists
+		await this.ensureGenerationsBaseExists();
 
 		// Create timestamp
 		const now = new Date();
@@ -387,7 +403,7 @@ export default class QuickBrushPlugin extends Plugin {
 			noteFilename = `${timestamp}.md`;
 		}
 
-		const notePath = `${this.settings.galleryFolder}/${noteFilename}`;
+		const notePath = `${galleryFolder}/${noteFilename}`;
 
 		// Create frontmatter properties
 		const properties = {
@@ -413,10 +429,60 @@ export default class QuickBrushPlugin extends Plugin {
 		content += `\n**Original Description:**\n\n${description}\n`;
 		content += `\n**Refined Description:**\n\n${refinedDescription}\n`;
 		if (prompt) {
-			content += `\n**Artistic Prompt:**\n\n${prompt}\n`;
+			content += `\n**Context Prompt:**\n\n${prompt}\n`;
 		}
 
 		await this.app.vault.create(notePath, content);
+	}
+
+	async ensureGenerationsBaseExists(): Promise<void> {
+		const basePath = this.getGenerationsBasePath();
+		const baseFile = this.app.vault.getAbstractFileByPath(basePath);
+
+		if (!baseFile) {
+			// Create the parent folder if needed
+			await this.ensureFolderExists(this.settings.quickbrushFolder);
+
+			// Create the .base file with Dataview query content
+			const galleryFolder = this.getGalleryFolder();
+			const content = `
+filters:
+  and:
+    - file.folder == "${galleryFolder}"
+formulas:
+  image: image(image)
+properties:
+  note.date:
+    displayName: Date
+  note.generation_type:
+    displayName: Type
+  note.quality:
+    displayName: Quality
+  note.aspect_ratio:
+    displayName: AR
+  note.brushstrokes_used:
+    displayName: Brushstrokes
+views:
+  - type: table
+    name: Table
+    order:
+      - file.name
+      - formula.image
+      - aspect_ratio
+      - brushstrokes_used
+      - date
+      - generation_type
+      - quality
+    sort:
+      - property: aspect_ratio
+        direction: DESC
+    rowHeight: tall
+    columnSize:
+      file.name: 343
+      formula.image: 201
+`;
+			await this.app.vault.create(basePath, content);
+		}
 	}
 
 	formatTimestamp(date: Date): string {
@@ -509,10 +575,10 @@ class GenerateModal extends Modal {
 				text.inputEl.style.width = '100%';
 			});
 
-		// Artistic Prompt
+		// Context Prompt
 		new Setting(contentEl)
-			.setName('Artistic Prompt (Optional)')
-			.setDesc('Additional styling or mood guidance (max 1000 characters)')
+			.setName('Context Prompt (Optional)')
+			.setDesc('Specific instructions on what to paint (max 1000 characters)')
 			.addTextArea(text => {
 				this.promptInput = text;
 				text
@@ -800,29 +866,29 @@ class QuickBrushSettingTab extends PluginSettingTab {
 					await this.plugin.saveSettings();
 				}));
 
-		// Images Folder
+		// QuickBrush Folder
 		new Setting(containerEl)
-			.setName('Images Folder')
-			.setDesc('Folder to save generated images')
+			.setName('QuickBrush Folder')
+			.setDesc('Parent folder for all QuickBrush files (images, gallery, and index)')
 			.addText(text => text
-				.setPlaceholder('Quickbrush/quickbrush-images')
-				.setValue(this.plugin.settings.imagesFolder)
+				.setPlaceholder('Quickbrush')
+				.setValue(this.plugin.settings.quickbrushFolder)
 				.onChange(async (value) => {
-					this.plugin.settings.imagesFolder = value;
+					this.plugin.settings.quickbrushFolder = value;
 					await this.plugin.saveSettings();
 				}));
 
-		// Gallery Folder
-		new Setting(containerEl)
-			.setName('Gallery Folder')
-			.setDesc('Folder to save gallery notes with image metadata')
-			.addText(text => text
-				.setPlaceholder('Quickbrush/quickbrush-gallery')
-				.setValue(this.plugin.settings.galleryFolder)
-				.onChange(async (value) => {
-					this.plugin.settings.galleryFolder = value;
-					await this.plugin.saveSettings();
-				}));
+		// Info about derived folders
+		const folderInfo = containerEl.createDiv();
+		folderInfo.style.fontSize = '0.9em';
+		folderInfo.style.color = 'var(--text-muted)';
+		folderInfo.style.marginTop = '-10px';
+		folderInfo.style.marginBottom = '20px';
+		folderInfo.innerHTML = `
+			<p>Images will be saved to: <code>${this.plugin.getImagesFolder()}</code></p>
+			<p>Gallery notes will be saved to: <code>${this.plugin.getGalleryFolder()}</code></p>
+			<p>Gallery index will be created at: <code>${this.plugin.getGenerationsBasePath()}</code></p>
+		`;
 
 		// Account Info Section
 		containerEl.createEl('h3', { text: 'Account Information' });

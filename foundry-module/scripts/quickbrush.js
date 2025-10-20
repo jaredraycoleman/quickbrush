@@ -430,8 +430,8 @@ class QuickbrushGallery {
         <h3>🖼️ Generation Options</h3>
         <ul>
           <li><strong>Generation Type:</strong> Choose Character, Scene, Creature, or Item to guide my artistic style</li>
-          <li><strong>Description:</strong> Tell me what you want painted! The more details, the better</li>
-          <li><strong>Prompt (Optional):</strong> Add mood, lighting, pose, or artistic direction</li>
+          <li><strong>Description:</strong> Long-form text describing what you want me to paint. Feel free to include as much detail as you like! I'll hone in on the key elements.</li>
+          <li><strong>Context Prompt (Optional):</strong> Specific instructions on what to paint</li>
           <li><strong>Quality:</strong> Low (fast & cheap), Medium (balanced), or High (detailed & beautiful)</li>
           <li><strong>Aspect Ratio:</strong> Square, Landscape, or Portrait</li>
           <li><strong>Reference Images:</strong> Upload up to 3 reference images to guide the style</li>

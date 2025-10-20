@@ -37,6 +37,7 @@
               placeholder="Describe your subject — Wispy loves detail!">{{ text or '' }}</textarea>
     <div class="form-text">
       This is the base — what your subject looks like or what the scene contains.
+      Feel free to copy/paste entire journal entries, notes, etc. We can hone in on what's important.
     </div>
     {% if error and not text %}
     <div class="invalid-feedback">
@@ -46,11 +47,11 @@
   </div>
 
   <div class="mb-3">
-    <label for="prompt" class="form-label fw-bold">Artistic Prompt</label>
+    <label for="prompt" class="form-label fw-bold">Context Prompt</label>
     <textarea class="form-control" id="prompt" name="prompt" rows="2"
       placeholder="e.g., in golden light, wearing a cloak, in a misty forest.">{{ prompt or '' }}</textarea>
     <div class="form-text">
-      Add mood, pose, or details that shape how Wispy paints.
+      Add mood, pose, or details about exactly what you want to see. (optional)
     </div>
   </div>
 

@@ -22,7 +22,7 @@ Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [
 - Easy browsing and organization
 
 ⚡ **Powerful Options**
-- Artistic prompts for styling
+- Context prompts for fine-grained results
 - Quality control (1, 3, or 5 brushstrokes)
 - Multiple aspect ratios
 - Rate limit tracking
@@ -93,7 +93,7 @@ Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [
 |--------|-------------|---------|
 | **Type** | Character, Scene, Creature, or Item | Character |
 | **Description** | What you want to generate (required) | - |
-| **Artistic Prompt** | Additional styling (optional) | - |
+| **Context Prompt** | Additional context for fine-grained control (optional) | - |
 | **Quality** | Low (1), Medium (3), High (5 brushstrokes) | Medium |
 | **Aspect Ratio** | Square, Landscape, or Portrait | Smart default based on type |
 
@@ -107,8 +107,8 @@ Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [
 
 ```
 Type: Character
-Description: A brave halfling with silver armor and a magic brush
-Artistic Prompt: In golden light, heroic pose
+Description: [A long journal entry describing "Alith", his background, appearance, and personality]
+Context Prompt: Alith with a sad expression on his face
 Quality: High
 Aspect Ratio: Square
 ```
@@ -117,8 +117,8 @@ Aspect Ratio: Square
 
 ```
 Type: Scene
-Description: Ancient library filled with magical tomes and floating candles
-Artistic Prompt: Misty atmosphere, warm lighting
+Description: [A detailed journal entry describing a bustling medieval marketplace]
+Context Prompt: The marketplace burned to the ground in a devastating fire
 Quality: Medium
 Aspect Ratio: Landscape
 ```
@@ -128,7 +128,7 @@ Aspect Ratio: Landscape
 ```
 Type: Creature
 Description: A majestic dragon with emerald scales
-Artistic Prompt: Flying over mountains, dramatic clouds
+Context Prompt: Flying over mountains, dramatic clouds
 Quality: High
 Aspect Ratio: Landscape
 ```

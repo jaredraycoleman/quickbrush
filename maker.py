@@ -1,3 +1,4 @@
+import json
 import pathlib
 from typing import Dict, List, Literal, Optional, Union
 from base64 import b64decode, b64encode
@@ -103,16 +104,32 @@ class ImageGenerator(ABC):
                         },
                     })
 
-        # Add text prompt
-        prompt_text = context_prompt + "\n\n" if context_prompt else ""
-        user_content.append({
-            "type": "text",
-            "text": f"{prompt_text}{description_label}:\n{user_text}"
-        })
+        prompt_json = {
+            "properties": {
+                "text": {
+                    "type": "string",
+                    "description": (
+                        "Long-form detailed information about the subject (e.g., possibly from a journal entry). "
+                        "May include irrelevant details; focus on physical description."
+                    ),
+                    "value": user_text
+                },
+                "prompt": {
+                    "type": "string",
+                    "description": (
+                        "The context prompt for the description. "
+                        "This is what the user wants you to focus on when generating the description. "
+                        "It may even contradict details in the long-form text. "
+                        "Always prioritize this prompt over the long-form text."
+                    ),
+                    "value": context_prompt
+                }
+            },
+        }
 
         messages.append({
             "role": "user",
-            "content": user_content
+            "content": json.dumps(prompt_json)
         })
 
         response = client.beta.chat.completions.parse(

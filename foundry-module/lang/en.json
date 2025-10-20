@@ -20,9 +20,9 @@
     "Dialog": {
       "Title": "Generate Image with Quickbrush",
       "Description": "Description",
-      "DescriptionPlaceholder": "Describe your subject — Wispy loves detail!",
-      "Prompt": "Artistic Prompt (optional)",
-      "PromptPlaceholder": "e.g., in golden light, wearing a cloak, in a misty forest",
+      "DescriptionPlaceholder": "Long-form text of what you want to generate. Feel free to copy/paste entire journal entries, notes, etc. We can hone in on what's important.",
+      "Prompt": "Context Prompt (optional)",
+      "PromptPlaceholder": "Add mood, pose, or details about exactly what you want to see.",
       "Type": "What do you want to paint?",
       "Types": {
         "character": "🎭 Character",

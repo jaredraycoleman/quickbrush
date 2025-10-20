@@ -8,12 +8,16 @@ Generate AI-powered images directly from your Obsidian notes using QuickBrush. C
 - **Smart Text Extraction**: Automatically extracts content from your active note
 - **Quality Options**: Choose from Low (1 brushstroke), Medium (3 brushstrokes), or High (5 brushstrokes)
 - **Multiple Aspect Ratios**: Square, Landscape, or Portrait
-- **Organized Storage**: Images saved to `quickbrush-images` folder
-- **Gallery Notes**: Each generation creates a timestamped note in `quickbrush-gallery` with:
+- **Organized Storage**: All files organized in a single parent folder:
+  - Images saved to `Quickbrush/quickbrush-images`
+  - Gallery notes in `Quickbrush/quickbrush-gallery`
+  - Gallery index at `Quickbrush/quickbrush-generations.base` (Dataview query)
+- **Gallery Notes**: Each generation creates a timestamped note with:
   - Embedded image
   - Generation metadata (type, quality, aspect ratio, etc.)
   - Original and refined descriptions
   - Automatic chronological ordering
+- **Dataview Integration**: Auto-generated `.base` file for viewing all generations in a table
 
 ## Installation
 
@@ -35,7 +39,10 @@ Generate AI-powered images directly from your Obsidian notes using QuickBrush. C
 1. Get your API key from [quickbrush.online](https://quickbrush.online)
 2. Open Settings → QuickBrush
 3. Enter your API key
-4. (Optional) Customize folder names for images and gallery notes
+4. (Optional) Customize the parent folder name (default: "Quickbrush")
+   - Images will be saved to: `{folder}/quickbrush-images`
+   - Gallery notes will be saved to: `{folder}/quickbrush-gallery`
+   - Gallery index will be created at: `{folder}/quickbrush-generations.base`
 
 ## Usage
 
@@ -99,7 +106,7 @@ aspect_ratio: "square"
 brushstrokes_used: 3
 original_description: "Your original description..."
 refined_description: "AI-enhanced description..."
-prompt: "Optional artistic prompt"
+prompt: "Optional context prompt"
 ---
 
 ![[quickbrush-images/quickbrush-abc123.webp]]
@@ -111,8 +118,28 @@ Gallery notes are automatically named with timestamps (e.g., `2025-01-15 103045.
 
 - **API Key**: Your QuickBrush API key
 - **API URL**: QuickBrush API endpoint (default: https://quickbrush.online/api)
-- **Images Folder**: Where generated images are saved (default: `quickbrush-images`)
-- **Gallery Folder**: Where gallery notes are saved (default: `quickbrush-gallery`)
+- **QuickBrush Folder**: Parent folder for all QuickBrush files (default: `Quickbrush`)
+  - Images: `{folder}/quickbrush-images`
+  - Gallery: `{folder}/quickbrush-gallery`
+  - Index: `{folder}/quickbrush-generations.base`
+
+## Gallery Index
+
+The plugin automatically creates a `quickbrush-generations.base` file in your QuickBrush folder. This file contains a Dataview query that displays all your generations in a sortable table:
+
+```dataview
+TABLE WITHOUT ID
+	file.link as "Generation",
+	date as "Date",
+	generation_type as "Type",
+	quality as "Quality",
+	aspect_ratio as "Aspect Ratio",
+	brushstrokes_used as "Brushstrokes"
+FROM "Quickbrush/quickbrush-gallery"
+SORT date DESC
+```
+
+To view this table, you need to have the [Dataview plugin](https://github.com/blacksmithgu/obsidian-dataview) installed. The file is automatically updated when you change the QuickBrush folder setting.
 
 ## Example Workflow
 
@@ -133,7 +160,7 @@ carries an ancient staff topped with a glowing crystal.
 
 2. Run "QuickBrush: Generate Character Image"
 3. The plugin extracts the description automatically
-4. Optionally add an artistic prompt like "ethereal lighting, mystical atmosphere"
+4. Optionally add a context prompt like "the character is smiling and has a painted face"
 5. Click Generate
 6. Image appears in `quickbrush-images/` and a gallery note is created in `quickbrush-gallery/`
 
