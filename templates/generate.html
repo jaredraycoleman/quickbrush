@@ -47,6 +47,22 @@
   </div>
 
   <div class="mb-3">
+    <label for="image_name" class="form-label fw-bold">Image Name <span class="text-danger">*</span></label>
+    <input type="text" class="form-control {% if error and not image_name %}is-invalid{% endif %}"
+           id="image_name" name="image_name" required
+           placeholder="e.g., Elven Warrior, Ancient Library, Fire Dragon"
+           value="{{ image_name or '' }}">
+    <div class="form-text">
+      This will be used as the filename when saving your image.
+    </div>
+    {% if error and not image_name %}
+    <div class="invalid-feedback">
+      Please provide a name for your image.
+    </div>
+    {% endif %}
+  </div>
+
+  <div class="mb-3">
     <label for="prompt" class="form-label fw-bold">Context Prompt</label>
     <textarea class="form-control" id="prompt" name="prompt" rows="2"
       placeholder="e.g., in golden light, wearing a cloak, in a misty forest.">{{ prompt or '' }}</textarea>
@@ -166,12 +182,24 @@ genTypeSelect.addEventListener('change', updateDefaultAspectRatio);
 // Form validation
 form.addEventListener('submit', (e) => {
   const textArea = document.getElementById('text');
+  const imageNameInput = document.getElementById('image_name');
+  let isValid = true;
+
   if (!textArea.value.trim()) {
     e.preventDefault();
     textArea.classList.add('is-invalid');
     textArea.focus();
-    return false;
+    isValid = false;
   }
+
+  if (!imageNameInput.value.trim()) {
+    e.preventDefault();
+    imageNameInput.classList.add('is-invalid');
+    if (isValid) imageNameInput.focus();
+    isValid = false;
+  }
+
+  if (!isValid) return false;
 
   // Show loading state
   btn.disabled = true;
@@ -181,6 +209,9 @@ form.addEventListener('submit', (e) => {
 
 // Remove invalid class when user starts typing
 document.getElementById('text').addEventListener('input', function() {
+  this.classList.remove('is-invalid');
+});
+document.getElementById('image_name').addEventListener('input', function() {
   this.classList.remove('is-invalid');
 });
 </script>

@@ -21,6 +21,7 @@
       "Title": "Generate Image with Quickbrush",
       "Description": "Description",
       "DescriptionPlaceholder": "Long-form text of what you want to generate. Feel free to copy/paste entire journal entries, notes, etc. We can hone in on what's important.",
+      "ImageName": "Image Name",
       "Prompt": "Context Prompt (optional)",
       "PromptPlaceholder": "Add mood, pose, or details about exactly what you want to see.",
       "Type": "What do you want to paint?",

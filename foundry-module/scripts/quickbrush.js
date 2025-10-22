@@ -18,13 +18,14 @@ class QuickbrushAPI {
   /**
    * Generate an image using Quickbrush API
    */
-  async generateImage({ text, prompt = '', generation_type = 'character', quality = 'medium', aspect_ratio = 'square', reference_image_paths = [] }) {
+  async generateImage({ text, image_name, prompt = '', generation_type = 'character', quality = 'medium', aspect_ratio = 'square', reference_image_paths = [] }) {
     if (!this.apiKey) {
       throw new Error(game.i18n.localize('QUICKBRUSH.Notifications.NoApiKey'));
     }
 
     const requestBody = {
       text,
+      image_name,
       prompt,
       generation_type,
       quality,
@@ -180,6 +181,7 @@ class QuickbrushDialog extends FormApplication {
 
     return {
       text: this.data.text || '',
+      image_name: this.data.image_name || this.targetDocument?.name || '',
       prompt: this.data.prompt || '',
       generation_type: this.data.generation_type || 'character',
       quality: this.data.quality || 'medium',
@@ -280,6 +282,11 @@ class QuickbrushDialog extends FormApplication {
     // Validate
     if (!formData.text || !formData.text.trim()) {
       ui.notifications.warn('Please provide a description for your image.');
+      return;
+    }
+
+    if (!formData.image_name || !formData.image_name.trim()) {
+      ui.notifications.warn('Please provide a name for your image.');
       return;
     }
 
@@ -858,7 +865,8 @@ Hooks.on('renderJournalEntrySheet', (app, html) => {
           generation_type: type,
           aspect_ratio: type === 'scene' ? 'landscape' : 'square',
           referenceImages
-        }
+        },
+        targetDocument: app.document
       }).render(true);
     });
 

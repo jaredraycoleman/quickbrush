@@ -33,7 +33,6 @@ def convert_for_openai(path: pathlib.Path, format: str) -> pathlib.Path:
     
 class Description(BaseModel):
     text: str = Field(..., description="The physical description of the subject.")
-    name: str = Field(..., description="A short name or title for the subject.")
 
 IMAGE_SIZE = Literal['256x256', '512x512', '1024x1024', '1536x1024', '1024x1536', 'auto']
 BACKGROUND = Literal["transparent", "opaque", "auto"]
@@ -55,7 +54,7 @@ class ImageGenerator(ABC):
             reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
 
         Returns:
-            Description: A Description object containing the text description and a short name/title.
+            Description: A Description object containing the text description.
         """
         raise NotImplementedError
 
@@ -78,7 +77,7 @@ class ImageGenerator(ABC):
             reference_images: Optional list of reference image paths
 
         Returns:
-            Description: A Description object with text and name
+            Description: A Description object with text
         """
         # Build messages with optional reference images
         messages: List[Dict[str, Union[str, List[Dict[str, str]]]]] = [
@@ -236,7 +235,7 @@ class CharacterImageGenerator(ImageGenerator):
             reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
 
         Returns:
-            Description: A Description object with text and name.
+            Description: A Description object with text.
         """
         system_prompt = (
             "You are a helpful assistant that creates short but detailed character descriptions "
@@ -246,7 +245,7 @@ class CharacterImageGenerator(ImageGenerator):
             "the general description describes them as typically wearing a different outfit). "
             "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
             "Focus on the physical description and do not include any names (even the character's name), personality traits, lore, etc. "
-            "You must respond with valid JSON in this exact format: {\"text\": \"detailed physical description\", \"name\": \"short name or title\"}"
+            "You must respond with valid JSON in this exact format: {\"text\": \"detailed physical description\"}"
         )
 
         return self._generate_description_with_gpt(
@@ -281,7 +280,7 @@ class SceneImageGenerator(ImageGenerator):
             reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
 
         Returns:
-            Description: A Description object with text and name.
+            Description: A Description object with text.
         """
         system_prompt = (
             "You are a helpful assistant that creates short but detailed scene descriptions "
@@ -291,7 +290,7 @@ class SceneImageGenerator(ImageGenerator):
             "describes a different setting). This will be used as a prompt for generating an image, "
             "so be as consistent and descriptive as possible. "
             "Focus on the physical description and do not include any names, personality traits, lore, etc. "
-            "You must respond with valid JSON in this exact format: {\"text\": \"detailed scene description\", \"name\": \"short name or title for the scene\"}"
+            "You must respond with valid JSON in this exact format: {\"text\": \"detailed scene description\"}"
         )
 
         return self._generate_description_with_gpt(
@@ -325,7 +324,7 @@ class CreatureImageGenerator(ImageGenerator):
             prompt (str): The context prompt for the description.
             reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
         Returns:
-            Description: A Description object with text and name.
+            Description: A Description object with text.
         """
         system_prompt = (
             "You are a helpful assistant that creates short but detailed creature descriptions "
@@ -335,7 +334,7 @@ class CreatureImageGenerator(ImageGenerator):
             "describes them as typically having different features). "
             "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
             "Focus on the physical description and do not include any names (even the creature's name), personality traits, lore, etc. "
-            "You must respond with valid JSON in this exact format: {\"text\": \"detailed creature description\", \"name\": \"short name or title for the creature\"}"
+            "You must respond with valid JSON in this exact format: {\"text\": \"detailed creature description\"}"
         )
 
         return self._generate_description_with_gpt(
@@ -368,7 +367,7 @@ class ItemImageGenerator(ImageGenerator):
             prompt (str): The context prompt for the description.
             reference_images (List[pathlib.Path], optional): Optional list of reference image paths.
         Returns:
-            Description: A Description object with text and name.
+            Description: A Description object with text.
         """
         system_prompt = (
             "You are a helpful assistant that creates short but detailed item descriptions "
@@ -378,7 +377,7 @@ class ItemImageGenerator(ImageGenerator):
             "describes it as typically having different features). "
             "This will be used as a prompt for generating an image, so be as consistent and descriptive as possible. "
             "Only relate the physical description of the item and do not include any names (even of the item itself), lore, personality, etc. "
-            "You must respond with valid JSON in this exact format: {\"text\": \"detailed item description\", \"name\": \"short name or title for the item\"}"
+            "You must respond with valid JSON in this exact format: {\"text\": \"detailed item description\"}"
         )
 
         return self._generate_description_with_gpt(

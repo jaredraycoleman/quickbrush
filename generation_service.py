@@ -71,6 +71,7 @@ def generate_image(
     text: str,
     generation_type: str,
     quality: str,
+    image_name: str,
     aspect_ratio: Optional[str] = None,
     prompt: str = "",
     reference_image_paths: List[pathlib.Path] | None = None,
@@ -87,6 +88,7 @@ def generate_image(
         text: Description of the image to generate
         generation_type: Type of generation (character, scene, creature, item)
         quality: Quality level (low, medium, high)
+        image_name: Name to save the image as (required)
         aspect_ratio: Aspect ratio (square, landscape, portrait). If None, defaults to square for most types, landscape for scenes
         prompt: Additional context or prompt (default: "")
         reference_image_paths: List of reference image paths (default: None)
@@ -167,7 +169,6 @@ def generate_image(
                 reference_images=reference_image_paths
             )
             description_text = description_obj.text
-            image_name = description_obj.name
         except Exception as e:
             logger.error(f"Error generating description: {e}")
             return GenerationResult(

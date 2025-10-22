@@ -85,6 +85,7 @@ async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
 class GenerateImageRequest(BaseModel):
     """Request model for image generation."""
     text: str = Field(..., description="Description of the image to generate", min_length=1, max_length=Config.MAX_TEXT_LENGTH)
+    image_name: str = Field(..., description="Name to save the image as", min_length=1, max_length=100)
     prompt: Optional[str] = Field(None, description="Additional context or prompt", max_length=Config.MAX_PROMPT_LENGTH)
     generation_type: Literal["character", "scene", "creature", "item"] = Field(
         default="character",
@@ -113,6 +114,7 @@ class GenerateImageRequest(BaseModel):
         json_schema_extra = {
             "example": {
                 "text": "A brave knight with silver armor",
+                "image_name": "Silver Knight",
                 "prompt": "Fantasy RPG character for my campaign",
                 "generation_type": "character",
                 "quality": "medium",
@@ -277,6 +279,7 @@ async def generate_image(
             text=request.text,
             generation_type=request.generation_type,
             quality=request.quality,
+            image_name=request.image_name,
             aspect_ratio=aspect_ratio,
             prompt=request.prompt or "",
             reference_image_paths=reference_paths,

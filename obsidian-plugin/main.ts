@@ -1,4 +1,4 @@
-import { App, Plugin, PluginSettingTab, Setting, Notice, TFile, TFolder, Modal, TextAreaComponent, DropdownComponent, requestUrl } from 'obsidian';
+import { App, Plugin, PluginSettingTab, Setting, Notice, TFile, TFolder, Modal, TextAreaComponent, TextComponent, DropdownComponent, requestUrl } from 'obsidian';
 
 interface QuickBrushSettings {
 	apiKey: string;
@@ -14,6 +14,7 @@ const DEFAULT_SETTINGS: QuickBrushSettings = {
 
 interface GenerationOptions {
 	text: string;
+	image_name: string;
 	prompt?: string;
 	generation_type: 'character' | 'scene' | 'creature' | 'item';
 	quality: 'low' | 'medium' | 'high';
@@ -118,8 +119,12 @@ export default class QuickBrushPlugin extends Plugin {
 		const activeFile = this.app.workspace.getActiveFile();
 		let initialText = '';
 		let initialImages: string[] = [];
+		let initialName = '';
 
 		if (activeFile) {
+			// Get the note title (filename without extension)
+			initialName = activeFile.basename;
+
 			this.app.vault.read(activeFile).then(async content => {
 				// Extract content without frontmatter
 				initialText = this.extractContentWithoutFrontmatter(content);
@@ -135,10 +140,10 @@ export default class QuickBrushPlugin extends Plugin {
 					}
 				}
 
-				new GenerateModal(this.app, this, initialText, initialImages, defaultType).open();
+				new GenerateModal(this.app, this, initialText, initialImages, initialName, defaultType).open();
 			});
 		} else {
-			new GenerateModal(this.app, this, initialText, initialImages, defaultType).open();
+			new GenerateModal(this.app, this, initialText, initialImages, initialName, defaultType).open();
 		}
 	}
 
@@ -474,7 +479,7 @@ views:
       - generation_type
       - quality
     sort:
-      - property: aspect_ratio
+      - property: date
         direction: DESC
     rowHeight: tall
     columnSize:
@@ -515,20 +520,23 @@ class GenerateModal extends Modal {
 	plugin: QuickBrushPlugin;
 	initialText: string;
 	initialImages: string[];
+	initialName: string;
 	defaultType?: string;
 
 	textInput: TextAreaComponent;
+	nameInput: TextComponent;
 	promptInput: TextAreaComponent;
 	typeDropdown: DropdownComponent;
 	qualityDropdown: DropdownComponent;
 	aspectRatioDropdown: DropdownComponent;
 	referenceImages: string[];
 
-	constructor(app: App, plugin: QuickBrushPlugin, initialText: string, initialImages: string[], defaultType?: string) {
+	constructor(app: App, plugin: QuickBrushPlugin, initialText: string, initialImages: string[], initialName: string, defaultType?: string) {
 		super(app);
 		this.plugin = plugin;
 		this.initialText = initialText;
 		this.initialImages = initialImages;
+		this.initialName = initialName;
 		this.defaultType = defaultType;
 		this.referenceImages = [...initialImages];
 	}
@@ -572,6 +580,18 @@ class GenerateModal extends Modal {
 					.setPlaceholder('Enter a description...')
 					.setValue(this.initialText)
 					.inputEl.rows = 8;
+				text.inputEl.style.width = '100%';
+			});
+
+		// Image Name
+		new Setting(contentEl)
+			.setName('Image Name')
+			.setDesc('This will be used as the filename when saving your image')
+			.addText(text => {
+				this.nameInput = text;
+				text
+					.setPlaceholder('e.g., Elven Warrior, Ancient Library')
+					.setValue(this.initialName);
 				text.inputEl.style.width = '100%';
 			});
 
@@ -766,8 +786,15 @@ class GenerateModal extends Modal {
 			return;
 		}
 
+		const imageName = this.nameInput.getValue().trim();
+		if (!imageName) {
+			new Notice('Image Name Required: Please enter a name for your image.', 5000);
+			return;
+		}
+
 		const options: GenerationOptions = {
 			text: text.substring(0, 10000),
+			image_name: imageName,
 			prompt: this.promptInput.getValue().substring(0, 1000) || undefined,
 			generation_type: this.typeDropdown.getValue() as any,
 			quality: this.qualityDropdown.getValue() as any,

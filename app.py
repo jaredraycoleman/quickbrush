@@ -540,6 +540,7 @@ def generate():
         form_data = {
             "text": request.form.get("text", ""),
             "prompt": request.form.get("prompt", ""),
+            "image_name": request.form.get("image_name", ""),
             "quality": request.form.get("quality", "medium"),
             "aspect_ratio": request.form.get("aspect_ratio"),
             "gen_type": request.form.get("gen_type", "character"),
@@ -562,6 +563,11 @@ def generate():
         # Validate description is not empty
         if not data.text.strip():
             flash("Please provide a description for your image.", "warning")
+            return render_template("generate.html", **form_data, error=True)
+
+        # Validate image name is not empty
+        if not form_data["image_name"].strip():
+            flash("Please provide a name for your image.", "warning")
             return render_template("generate.html", **form_data, error=True)
 
         # Handle uploaded reference images (max 3)
@@ -595,6 +601,7 @@ def generate():
                 text=data.text,
                 generation_type=gen_type,
                 quality=data.quality,
+                image_name=form_data["image_name"].strip(),
                 aspect_ratio=form_data["aspect_ratio"],
                 prompt=data.prompt,
                 reference_image_paths=reference_paths,
@@ -616,6 +623,7 @@ def generate():
                     description=result.refined_description,
                     text=data.text,
                     prompt=data.prompt,
+                    image_name=form_data["image_name"],
                     gen_type=gen_type,
                 )
             else:
