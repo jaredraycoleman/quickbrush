@@ -125,7 +125,7 @@ python setup_admin.py  # Creates first admin user + invitation codes
 
 ## Integration Points
 
-### Obsidian Plugin (`obsidian-plugin/`)
+### Obsidian Plugin (`quickbrush-obsidian-plugin/`)
 - TypeScript plugin compiled with esbuild
 - Auto-extracts text from active note (excluding frontmatter)
 - Auto-selects first 3 embedded images as references
