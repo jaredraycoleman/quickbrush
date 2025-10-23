@@ -20,8 +20,10 @@ def login_required(f):
     """Require user to be logged in."""
     @wraps(f)
     def decorated(*args, **kwargs):
+        from flask import request
         if "user" not in session:
-            return redirect(url_for("login"))
+            # Save the current URL to redirect back after login
+            return redirect(url_for("login", next=request.url))
         return f(*args, **kwargs)
     return decorated
 
@@ -34,8 +36,9 @@ def invite_required(f):
     """
     @wraps(f)
     def decorated(*args, **kwargs):
+        from flask import request
         if "user" not in session:
-            return redirect(url_for("login"))
+            return redirect(url_for("login", next=request.url))
 
         # Import here to avoid circular dependency
         from models import get_or_create_user
@@ -69,8 +72,9 @@ def admin_required(f):
     """Require user to be an admin."""
     @wraps(f)
     def decorated(*args, **kwargs):
+        from flask import request
         if "user" not in session:
-            return redirect(url_for("login"))
+            return redirect(url_for("login", next=request.url))
 
         # Import here to avoid circular dependency
         from models import get_or_create_user

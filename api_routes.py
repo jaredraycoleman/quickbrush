@@ -7,8 +7,8 @@ This module provides RESTful API endpoints for:
 - User account information
 """
 
-from fastapi import FastAPI, HTTPException, Depends, status, Header
-from fastapi.security import HTTPBearer
+from fastapi import FastAPI, HTTPException, Depends, status
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -30,7 +30,10 @@ api = FastAPI(
     version="1.0.1",
     docs_url="/docs",
     redoc_url="/redoc",
-    openapi_url="/openapi.json"
+    openapi_url="/openapi.json",
+    swagger_ui_parameters={
+        "persistAuthorization": True,
+    }
 )
 
 # Add CORS middleware for Foundry VTT integration
@@ -42,32 +45,55 @@ api.add_middleware(
     allow_headers=["*"],
 )
 
-# Security
-security = HTTPBearer()
+# Security scheme
+security = HTTPBearer(
+    scheme_name="Bearer",
+    description="API Key (qb_keyid:secret) or OAuth Token (qb_at_xxxxx)",
+    auto_error=False
+)
 
 
 # ========================================
 # AUTHENTICATION DEPENDENCY
 # ========================================
 
-async def get_current_user(authorization: Optional[str] = Header(None)) -> User:
-    """
-    Dependency to authenticate API requests via API key.
-
-    Expects: Authorization: Bearer qb_xxxxx:secret
-    """
-    if not authorization:
+async def get_current_user(credentials: Optional[HTTPAuthorizationCredentials] = Depends(security)) -> User:
+    """Authenticate API requests via API key or OAuth token."""
+    if not credentials:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Missing authorization header",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    user = authenticate_api_key(authorization)
+    # Get the authorization value (without "Bearer " prefix)
+    auth_value = credentials.credentials
+
+    # Try OAuth token first (starts with qb_at_)
+    if auth_value.startswith("qb_at_"):
+        from oauth_service import verify_access_token
+        result = verify_access_token(auth_value)
+
+        if result:
+            oauth_token, user = result
+            # Check if subscription needs renewal
+            from stripe_utils import check_and_renew_subscription
+            check_and_renew_subscription(user)
+            return user
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or expired OAuth token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+
+    # Try API key authentication (qb_keyid:secret format)
+    # Need to add "Bearer " prefix back for authenticate_api_key
+    user = authenticate_api_key(f"Bearer {auth_value}")
     if not user:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid or expired API key",
+            detail="Invalid or expired credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
@@ -166,20 +192,14 @@ async def health_check():
 
 @api.get("/rate-limit", tags=["User"])
 async def get_rate_limit_status(user: User = Depends(get_current_user)):
-    """
-    Get current rate limit status for the authenticated user.
-
-    Returns information about current usage and limits for image generation.
-    """
+    """Get current rate limit status and usage for image generation."""
     from rate_limiter import get_rate_limit_status
     return get_rate_limit_status(user, action="generate_image")
 
 
 @api.get("/user", response_model=UserInfoResponse, tags=["User"])
 async def get_user_info(user: User = Depends(get_current_user)):
-    """
-    Get current user information including subscription and brushstroke balance.
-    """
+    """Get user account info including subscription tier and brushstroke balance."""
     # Get subscription info from Stripe (single source of truth)
     from stripe_utils import get_subscription_info
     subscription_info_tuple = get_subscription_info(user)
@@ -228,25 +248,7 @@ async def generate_image(
     user: User = Depends(get_current_user)
 ):
     """
-    Generate an image using AI.
-
-    This endpoint:
-    1. Validates the request
-    2. Checks brushstroke balance
-    3. Generates the image using OpenAI
-    4. Deducts brushstrokes
-    5. Returns the generated image URL
-
-    **Authentication**: Requires valid API key in Authorization header.
-
-    **Rate Limits**: Respects OpenAI rate limits.
-
-    **Costs**:
-    - Low quality: 1 brushstroke
-    - Medium quality: 3 brushstrokes
-    - High quality: 5 brushstrokes
-
-    **Note**: Images are stored as WebP format in MongoDB. Only the last 100 images per user are kept.
+    Generate an AI image. Costs: low=1, medium=3, high=5 brushstrokes. Returns WebP format. Max 100 images stored per user.
     """
     # Handle backward compatibility: convert size to aspect_ratio if provided
     aspect_ratio = request.aspect_ratio
@@ -343,11 +345,7 @@ async def get_image(
     generation_id: str,
     user: User = Depends(get_current_user)
 ):
-    """
-    Get a generated image by ID.
-
-    Returns the WebP image data.
-    """
+    """Get a generated image by ID. Returns WebP image data."""
     from image_service import get_generation_by_id
     from fastapi.responses import Response
 
@@ -382,15 +380,7 @@ async def list_generations(
     offset: int = 0,
     user: User = Depends(get_current_user)
 ):
-    """
-    List user's recent image generations.
-
-    **Parameters**:
-    - limit: Maximum number of results (default: 10, max: 100)
-    - offset: Number of results to skip (default: 0)
-
-    **Note**: Only the last 100 images are stored. Image URLs point to `/api/image/{id}`.
-    """
+    """List user's recent generations. Max 100 stored. Supports pagination via limit/offset."""
     limit = min(limit, 100)
 
     from image_service import get_user_generations

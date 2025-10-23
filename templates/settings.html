@@ -52,6 +52,14 @@
                         <a href="{{ url_for('api_keys_page') }}" class="btn btn-outline-primary">
                             <i class="bi bi-key"></i> Manage API Keys
                         </a>
+                        <a href="{{ url_for('authorized_apps') }}" class="btn btn-outline-primary">
+                            <i class="bi bi-shield-check"></i> Authorized Applications
+                        </a>
+                        {% if user.is_admin %}
+                        <a href="{{ url_for('developer_apps') }}" class="btn btn-outline-primary">
+                            <i class="bi bi-code-square"></i> OAuth Applications (Admin)
+                        </a>
+                        {% endif %}
                         <a href="{{ url_for('portal') }}" class="btn btn-outline-primary">
                             <i class="bi bi-credit-card"></i> Billing & Subscriptions
                         </a>

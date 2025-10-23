@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Create OAuth Application{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="mb-4">
+      <a href="{{ url_for('developer_apps') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Back to Applications
+      </a>
+    </div>
+
+    <div class="card shadow">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0"><i class="bi bi-plus-circle"></i> Create OAuth Application</h4>
+      </div>
+      <div class="card-body">
+        <form method="POST">
+          <div class="mb-3">
+            <label for="name" class="form-label">Application Name <span class="text-danger">*</span></label>
+            <input
+              type="text"
+              class="form-control"
+              id="name"
+              name="name"
+              required
+              value="{{ form_data.name if form_data else '' }}"
+              placeholder="My Custom GPT"
+            >
+            <div class="form-text">A descriptive name for your application</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="description" class="form-label">Description</label>
+            <textarea
+              class="form-control"
+              id="description"
+              name="description"
+              rows="3"
+              placeholder="This GPT helps users generate character art for their campaigns..."
+            >{{ form_data.description if form_data else '' }}</textarea>
+            <div class="form-text">Optional description of what your application does</div>
+          </div>
+
+          <div class="mb-3">
+            <label for="homepage_url" class="form-label">Homepage URL</label>
+            <input
+              type="url"
+              class="form-control"
+              id="homepage_url"
+              name="homepage_url"
+              value="{{ form_data.homepage_url if form_data else '' }}"
+              placeholder="https://example.com"
+            >
+            <div class="form-text">Optional link to your application's homepage</div>
+          </div>
+
+          <div class="mb-4">
+            <label for="redirect_uris" class="form-label">Redirect URIs <span class="text-danger">*</span></label>
+            <textarea
+              class="form-control font-monospace"
+              id="redirect_uris"
+              name="redirect_uris"
+              rows="4"
+              required
+              placeholder="https://chat.openai.com/aip/g-YOUR-GPT-ID/oauth/callback"
+            >{{ form_data.redirect_uris if form_data else '' }}</textarea>
+            <div class="form-text">
+              Enter one redirect URI per line. For custom GPTs, use the format:
+              <code>https://chat.openai.com/aip/g-YOUR-GPT-ID/oauth/callback</code>
+            </div>
+          </div>
+
+          <div class="alert alert-info">
+            <i class="bi bi-info-circle"></i>
+            <strong>Note:</strong> After creating your application, you'll receive a client secret.
+            <strong>Save it immediately</strong> as it will only be shown once!
+          </div>
+
+          <div class="d-grid gap-2">
+            <button type="submit" class="btn btn-primary btn-lg">
+              <i class="bi bi-plus-circle"></i> Create Application
+            </button>
+            <a href="{{ url_for('developer_apps') }}" class="btn btn-outline-secondary">
+              Cancel
+            </a>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Help Section -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-question-circle"></i> Custom GPT Integration</h5>
+      </div>
+      <div class="card-body">
+        <p>To integrate Quickbrush with a custom GPT:</p>
+        <ol>
+          <li>Create your OAuth application here</li>
+          <li>Go to your GPT's settings in ChatGPT</li>
+          <li>Under "Authentication", select "OAuth"</li>
+          <li>Enter the following details:
+            <ul>
+              <li><strong>Client ID:</strong> (provided after creation)</li>
+              <li><strong>Client Secret:</strong> (provided after creation)</li>
+              <li><strong>Authorization URL:</strong> <code>{{ url_for('oauth_authorize', _external=True) }}</code></li>
+              <li><strong>Token URL:</strong> <code>{{ url_for('oauth_token', _external=True) }}</code></li>
+              <li><strong>Scope:</strong> <code>read:user write:generate</code></li>
+            </ul>
+          </li>
+          <li>Make sure your redirect URI matches exactly what you enter here</li>
+        </ol>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

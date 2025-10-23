@@ -1,0 +1,235 @@
+{% extends "base.html" %}
+{% block title %}{{ app.name }} - OAuth Application{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="mb-4">
+      <a href="{{ url_for('developer_apps') }}" class="btn btn-outline-secondary btn-sm">
+        <i class="bi bi-arrow-left"></i> Back to Applications
+      </a>
+    </div>
+
+    <!-- App Details -->
+    <div class="card shadow mb-4">
+      <div class="card-header bg-primary text-white">
+        <h4 class="mb-0">
+          <i class="bi bi-code-square"></i> {{ app.name }}
+          {% if not app.is_active %}
+            <span class="badge bg-secondary">Inactive</span>
+          {% endif %}
+        </h4>
+      </div>
+      <div class="card-body">
+        {% if app.description %}
+          <p class="text-muted">{{ app.description }}</p>
+        {% endif %}
+
+        <div class="row">
+          <div class="col-md-6">
+            <h6>Application Details</h6>
+            <table class="table table-sm">
+              <tr>
+                <td><strong>Client ID</strong></td>
+                <td><code>{{ app.client_id }}</code></td>
+              </tr>
+              <tr>
+                <td><strong>Created By</strong></td>
+                <td>{{ app.owner.email if app.owner else 'Unknown' }}</td>
+              </tr>
+              <tr>
+                <td><strong>Created</strong></td>
+                <td>{{ app.created_at.strftime('%Y-%m-%d %H:%M') }}</td>
+              </tr>
+              {% if app.last_used_at %}
+              <tr>
+                <td><strong>Last Used</strong></td>
+                <td>{{ app.last_used_at.strftime('%Y-%m-%d %H:%M') }}</td>
+              </tr>
+              {% endif %}
+              {% if app.homepage_url %}
+              <tr>
+                <td><strong>Homepage</strong></td>
+                <td><a href="{{ app.homepage_url }}" target="_blank">{{ app.homepage_url }}</a></td>
+              </tr>
+              {% endif %}
+            </table>
+          </div>
+
+          <div class="col-md-6">
+            <h6>Usage Statistics</h6>
+            <table class="table table-sm">
+              <tr>
+                <td><strong>Authorized Users</strong></td>
+                <td>{{ auth_count }}</td>
+              </tr>
+              <tr>
+                <td><strong>Total API Requests</strong></td>
+                <td>{{ app.total_requests }}</td>
+              </tr>
+              <tr>
+                <td><strong>PKCE Required</strong></td>
+                <td>
+                  {% if app.require_pkce %}
+                    <span class="badge bg-success">Yes</span>
+                  {% else %}
+                    <span class="badge bg-warning">No</span>
+                  {% endif %}
+                </td>
+              </tr>
+            </table>
+          </div>
+        </div>
+
+        <hr>
+
+        <h6>Allowed Scopes</h6>
+        <div class="mb-3">
+          {% for scope in app.allowed_scopes %}
+            <span class="badge bg-info me-1">{{ scope }}</span>
+          {% endfor %}
+        </div>
+
+        <h6>Redirect URIs</h6>
+        <ul class="list-group mb-3">
+          {% for uri in app.redirect_uris %}
+            <li class="list-group-item"><code>{{ uri }}</code></li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+
+    <!-- Client Secret (shown once after creation) -->
+    {% if new_secret %}
+      <div class="alert alert-warning shadow">
+        <h5><i class="bi bi-exclamation-triangle"></i> Important: Save Your Client Secret</h5>
+        <p>This is the only time you'll see your client secret. Save it securely!</p>
+        <div class="input-group mb-3">
+          <input type="text" class="form-control font-monospace" id="clientSecret" value="{{ new_secret }}" readonly>
+          <button class="btn btn-outline-secondary" type="button" onclick="copyToClipboard('clientSecret')">
+            <i class="bi bi-clipboard"></i> Copy
+          </button>
+        </div>
+        <small class="text-muted">
+          If you lose this secret, you'll need to regenerate it (feature coming soon).
+        </small>
+      </div>
+    {% endif %}
+
+    <!-- OAuth Configuration (for custom GPT) -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-gear"></i> OAuth Configuration</h5>
+      </div>
+      <div class="card-body">
+        <p>Use these values when setting up OAuth in your application:</p>
+        <table class="table">
+          <tr>
+            <td><strong>Authorization URL</strong></td>
+            <td><code>{{ url_for('oauth_authorize', _external=True, _scheme='https') }}</code></td>
+          </tr>
+          <tr>
+            <td><strong>Token URL</strong></td>
+            <td><code>{{ url_for('oauth_token', _external=True, _scheme='https') }}</code></td>
+          </tr>
+          <tr>
+            <td><strong>Client ID</strong></td>
+            <td><code>{{ app.client_id }}</code></td>
+          </tr>
+          <tr>
+            <td><strong>Scopes</strong></td>
+            <td><code>{{ app.allowed_scopes | join(' ') }}</code></td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <!-- API Documentation -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-book"></i> API Endpoints</h5>
+      </div>
+      <div class="card-body">
+        <p>Once users authorize your application, use Bearer tokens to access these endpoints:</p>
+        <ul>
+          <li><code>GET {{ request.url_root }}api/user</code> - Get user information</li>
+          <li><code>POST {{ request.url_root }}api/generate</code> - Generate images</li>
+          <li><code>GET {{ request.url_root }}api/generations</code> - List user's generations</li>
+        </ul>
+        <p>Full API documentation: <a href="{{ request.url_root }}api/docs" target="_blank">{{ request.url_root }}api/docs</a></p>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="card mb-4">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-tools"></i> Actions</h5>
+      </div>
+      <div class="card-body">
+        <div class="d-grid gap-2">
+          <a href="{{ url_for('edit_developer_app', app_id=app.id) }}" class="btn btn-primary">
+            <i class="bi bi-pencil"></i> Edit Application
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Danger Zone -->
+    <div class="card border-danger mb-4">
+      <div class="card-header bg-danger text-white">
+        <h5 class="mb-0"><i class="bi bi-exclamation-triangle"></i> Danger Zone</h5>
+      </div>
+      <div class="card-body">
+        <h6>Delete Application</h6>
+        <p class="text-muted">
+          Permanently delete this OAuth application. This will revoke all access tokens and cannot be undone.
+        </p>
+        <button type="button" class="btn btn-danger" data-bs-toggle="modal" data-bs-target="#deleteModal">
+          <i class="bi bi-trash"></i> Delete Application
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Delete Confirmation Modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1" aria-labelledby="deleteModalLabel" aria-hidden="true">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header bg-danger text-white">
+        <h5 class="modal-title" id="deleteModalLabel">Confirm Deletion</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+      </div>
+      <form method="POST" action="{{ url_for('delete_developer_app', app_id=app.id) }}">
+        <div class="modal-body">
+          <p>This action cannot be undone. This will permanently delete the OAuth application and revoke all associated access tokens.</p>
+          <p>Please type <strong>{{ app.name }}</strong> to confirm:</p>
+          <input type="text" class="form-control" name="confirmation" required>
+        </div>
+        <div class="modal-footer">
+          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+          <button type="submit" class="btn btn-danger">Delete Application</button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function copyToClipboard(elementId) {
+  const element = document.getElementById(elementId);
+  element.select();
+  document.execCommand('copy');
+
+  // Show feedback
+  const button = event.target.closest('button');
+  const originalHTML = button.innerHTML;
+  button.innerHTML = '<i class="bi bi-check"></i> Copied!';
+  setTimeout(() => {
+    button.innerHTML = originalHTML;
+  }, 2000);
+}
+</script>
+{% endblock %}
