@@ -34,7 +34,7 @@ spec:
             - name: FLASK_ENV
               value: "production"
             - name: DEPLOY_ID # for easy re-deployment
-              value: DEPLOYID-24d51d72b40e7ea4ff8ef68dc6ec7cf9
+              value: DEPLOYID-d41a3faf009c873e84e82b0fb9d8bb15
 
             # Flask secret key
             - name: APP_SECRET_KEY
