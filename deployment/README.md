@@ -64,9 +64,9 @@ kubectl -n quickbrush create secret generic openai-credentials \
 
 Edit `deployment/service.yaml` if needed:
 
-- Update `AUTH0_DOMAIN` (line 39)
-- Update `AUTH0_AUDIENCE` (line 41)
-- Update domain to your actual domain (currently: `quickbrush.online`)
+- Update `AUTH0_DOMAIN` (Auth0 tenant domain)
+- Update `AUTH0_AUDIENCE` to `https://quickbrush.ai`
+- Primary host is `quickbrush.ai`.
 
 ### 3. Build and Push Docker Image
 
@@ -329,7 +329,7 @@ The deployment includes health checks:
 
 Test manually:
 ```bash
-curl https://quickbrush.online/api/health
+curl https://quickbrush.ai/api/health
 ```
 
 ## Performance Tuning

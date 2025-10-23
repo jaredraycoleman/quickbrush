@@ -34,7 +34,7 @@ spec:
             - name: FLASK_ENV
               value: "production"
             - name: DEPLOY_ID # for easy re-deployment
-              value: DEPLOYID-b89c3dc48cc8e087fbb873d6eacbad1f
+              value: DEPLOYID-24d51d72b40e7ea4ff8ef68dc6ec7cf9
 
             # Flask secret key
             - name: APP_SECRET_KEY
@@ -47,7 +47,7 @@ spec:
             - name: AUTH0_DOMAIN
               value: "quickbrush.us.auth0.com"  # Update with your Auth0 domain
             - name: AUTH0_AUDIENCE
-              value: "https://quickbrush.online"  # Update with your API identifier
+              value: "https://quickbrush.ai"  # Update with your API identifier
             - name: AUTH0_CLIENT_ID
               valueFrom:
                 secretKeyRef:
@@ -59,7 +59,7 @@ spec:
                   name: auth0-credentials
                   key: AUTH0_CLIENT_SECRET
             - name: AUTH0_CALLBACK_URL
-              value: "https://quickbrush.online/callback"
+              value: "https://quickbrush.ai/callback"
 
             # MongoDB configuration
             - name: MONGODB_URI
@@ -77,7 +77,7 @@ spec:
                   name: stripe-credentials
                   key: STRIPE_SECRET_KEY
             - name: PORTAL_RETURN_URL
-              value: "https://quickbrush.online/dashboard"
+              value: "https://quickbrush.ai/dashboard"
 
             # Stripe Price IDs - Subscriptions
             - name: STRIPE_PRICE_BASIC
@@ -184,7 +184,7 @@ metadata:
     traefik.ingress.kubernetes.io/router.middlewares: quickbrush-redirect-https@kubernetescrd
 spec:
   rules:
-    - host: quickbrush.online
+    - host: quickbrush.ai
       http:
         paths:
           - path: /
@@ -197,15 +197,53 @@ spec:
   tls:
     - secretName: quickbrush-service-cert
       hosts:
-        - quickbrush.online
+        - quickbrush.ai
 ---
 # HTTPS redirect middleware
 apiVersion: traefik.containo.us/v1alpha1
 kind: Middleware
 metadata:
-  name: redirect-https
+  name: quickbrush-redirect-https
   namespace: quickbrush
 spec:
   redirectScheme:
     scheme: https
     permanent: true
+---
+# Redirect quickbrush.online -> quickbrush.ai
+apiVersion: traefik.containo.us/v1alpha1
+kind: Middleware
+metadata:
+  name: redirect-online-to-ai
+  namespace: quickbrush
+spec:
+  redirectRegex:
+    regex: ^https?://quickbrush\.online(.*)
+    replacement: https://quickbrush.ai$1
+    permanent: true
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: quickbrush-redirect-ingress
+  namespace: quickbrush
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: web, websecure
+    cert-manager.io/cluster-issuer: letsencrypt-issuer
+    traefik.ingress.kubernetes.io/router.middlewares: quickbrush-redirect-online-to-ai@kubernetescrd
+spec:
+  rules:
+    - host: quickbrush.online
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: quickbrush-service
+                port:
+                  number: 80
+  tls:
+    - secretName: quickbrush-redirect-cert
+      hosts:
+        - quickbrush.online

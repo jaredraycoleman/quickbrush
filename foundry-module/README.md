@@ -1,8 +1,8 @@
 # Quickbrush AI Image Generator for Foundry VTT
 
-Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [Quickbrush](https://quickbrush.online). Create characters, scenes, creatures, and items from your journal notes with just a few clicks!
+Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [Quickbrush](https://quickbrush.ai). Create characters, scenes, creatures, and items from your journal notes with just a few clicks!
 
-![Quickbrush](https://quickbrush.online/static/images/wispy.webp)
+![Quickbrush](https://quickbrush.ai/static/images/wispy.webp)
 
 ## Features
 
@@ -35,7 +35,7 @@ Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [
 2. Click **Install Module**
 3. Paste this manifest URL:
    ```
-   https://quickbrush.online/foundry-module/module.json
+   https://quickbrush.ai/foundry-module/module.json
    ```
 4. Click **Install**
 
@@ -50,7 +50,7 @@ Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [
 
 ### 1. Get Your API Key
 
-1. Go to [Quickbrush Dashboard](https://quickbrush.online/dashboard)
+1. Go to [Quickbrush Dashboard](https://quickbrush.ai/dashboard)
 2. Click on **"Manage API Keys"**
 3. Create a new API key
 4. Copy the key (you'll only see it once!)
@@ -174,13 +174,13 @@ Image generation costs brushstrokes based on quality:
 | Medium | 3 brushstrokes |
 | High | 5 brushstrokes |
 
-Purchase brushstrokes or subscribe at [Quickbrush Dashboard](https://quickbrush.online/dashboard).
+Purchase brushstrokes or subscribe at [Quickbrush Dashboard](https://quickbrush.ai/dashboard).
 
 ## Troubleshooting
 
 ### "Please set your Quickbrush API key"
 
-**Solution:** Go to Module Settings and add your API key from [quickbrush.online/dashboard](https://quickbrush.online/dashboard).
+**Solution:** Go to Module Settings and add your API key from [quickbrush.ai/dashboard](https://quickbrush.ai/dashboard).
 
 ### "Rate limit exceeded"
 
@@ -190,7 +190,7 @@ Purchase brushstrokes or subscribe at [Quickbrush Dashboard](https://quickbrush.
 
 ### "Insufficient brushstrokes"
 
-**Solution:** You've run out of brushstrokes! Visit [Quickbrush Dashboard](https://quickbrush.online/dashboard) to:
+**Solution:** You've run out of brushstrokes! Visit [Quickbrush Dashboard](https://quickbrush.ai/dashboard) to:
 - Purchase a brushstroke pack (never expires)
 - Subscribe for monthly allowances (best value!)
 
@@ -199,7 +199,7 @@ Purchase brushstrokes or subscribe at [Quickbrush Dashboard](https://quickbrush.
 **Possible causes:**
 1. Invalid API key
 2. Network connectivity issues
-3. Quickbrush API is down (check [status page](https://quickbrush.online))
+3. Quickbrush API is down (check [status page](https://quickbrush.ai))
 
 **Debug:**
 ```javascript
@@ -271,7 +271,7 @@ await Quickbrush.Gallery.addToGallery({
 | Setting | Description | Default |
 |---------|-------------|---------|
 | **API Key** | Your Quickbrush API key (required) | - |
-| **API URL** | Quickbrush API endpoint | `https://quickbrush.online/api` |
+| **API URL** | Quickbrush API endpoint | `https://quickbrush.ai/api` |
 | **Image Save Folder** | Where images are saved | `quickbrush-images` |
 
 ## Privacy & Security
@@ -283,8 +283,8 @@ await Quickbrush.Gallery.addToGallery({
 
 ## Support
 
-- **Documentation**: [https://quickbrush.online/docs](https://quickbrush.online/docs)
-- **Support Email**: [support@quickbrush.online](mailto:support@quickbrush.online)
+- **Documentation**: [https://quickbrush.ai/docs](https://quickbrush.ai/docs)
+- **Support Email**: [support@quickbrush.ai](mailto:support@quickbrush.ai)
 - **Bug Reports**: [GitHub Issues](https://github.com/quickbrush/foundry-module/issues)
 - **Discord**: [Join our server](https://discord.gg/quickbrush)
 
@@ -304,7 +304,7 @@ Quickbrush uses a brushstroke-based pricing model:
 - Large: $40 - 1000 brushstrokes
 - Mega: $100 - 2500 brushstrokes
 
-Learn more at [quickbrush.online/dashboard](https://quickbrush.online/dashboard)
+Learn more at [quickbrush.ai/dashboard](https://quickbrush.ai/dashboard)
 
 ## Changelog
 
@@ -320,7 +320,7 @@ Learn more at [quickbrush.online/dashboard](https://quickbrush.online/dashboard)
 
 This module is provided under the MIT License. See LICENSE file for details.
 
-Quickbrush API and service are provided by Quickbrush ([quickbrush.online](https://quickbrush.online)).
+Quickbrush API and service are provided by Quickbrush ([quickbrush.ai](https://quickbrush.ai)).
 
 ## Credits
 
@@ -330,6 +330,6 @@ Quickbrush API and service are provided by Quickbrush ([quickbrush.online](https
 
 ---
 
-Made with ❤️ by [Quickbrush](https://quickbrush.online)
+Made with ❤️ by [Quickbrush](https://quickbrush.ai)
 
 *"Your adventure needs a splash of color!" — Wispy*

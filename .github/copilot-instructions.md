@@ -141,7 +141,7 @@ python setup_admin.py  # Creates first admin user + invitation codes
 ### API Client Pattern
 ```javascript
 // Reference implementation in foundry-module/scripts/quickbrush.js
-const response = await fetch('https://quickbrush.online/api/generate', {
+const response = await fetch('https://quickbrush.ai/api/generate', {
   method: 'POST',
   headers: {
     'Authorization': `Bearer ${apiKey}`,

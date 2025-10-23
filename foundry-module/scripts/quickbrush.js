@@ -4,7 +4,7 @@
  */
 
 const MODULE_ID = 'quickbrush';
-const API_ENDPOINT = 'https://quickbrush.online/api';
+const API_ENDPOINT = 'https://quickbrush.ai/api';
 
 /**
  * Quickbrush API Client
@@ -412,7 +412,7 @@ class QuickbrushGallery {
 
         <h3>🔑 First Things First: Setting Up Your API Key</h3>
         <ol>
-          <li>Visit <a href="https://quickbrush.online" target="_blank">quickbrush.online</a> and create an account</li>
+          <li>Visit <a href="https://quickbrush.ai" target="_blank">quickbrush.ai</a> and create an account</li>
           <li>Copy your API key from your account dashboard</li>
           <li>In Foundry VTT, go to <strong>Settings</strong> → <strong>Configure Settings</strong> → <strong>Module Settings</strong></li>
           <li>Find <strong>Quickbrush</strong> and paste your API key in the <strong>API Key</strong> field</li>
@@ -464,7 +464,7 @@ class QuickbrushGallery {
           <li><strong>Medium Quality:</strong> Balanced cost and quality</li>
           <li><strong>High Quality:</strong> More brushstrokes, stunning detail</li>
         </ul>
-        <p>Check your brushstrokes balance at <a href="https://quickbrush.online" target="_blank">quickbrush.online</a>!</p>
+  <p>Check your brushstrokes balance at <a href="https://quickbrush.ai" target="_blank">quickbrush.ai</a>!</p>
 
         <hr style="margin: 2em 0;">
 
@@ -475,7 +475,7 @@ class QuickbrushGallery {
           — Wispy Quickbrush 🎨✨
         </p>
         <p style="text-align: center; font-size: 0.9em; margin-top: 1.5em;">
-          Quickbrush Module v1.0.3 | <a href="https://quickbrush.online" target="_blank">quickbrush.online</a>
+          Quickbrush Module v1.0.3 | <a href="https://quickbrush.ai" target="_blank">quickbrush.ai</a>
         </p>
       </div>
     `;

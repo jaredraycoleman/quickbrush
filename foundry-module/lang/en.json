@@ -6,11 +6,11 @@
     "Settings": {
       "ApiKey": {
         "Name": "API Key",
-        "Hint": "Your Quickbrush API key. Get one at https://quickbrush.online/dashboard"
+  "Hint": "Your Quickbrush API key. Get one at https://quickbrush.ai/dashboard"
       },
       "ApiUrl": {
         "Name": "API URL",
-        "Hint": "Quickbrush API endpoint (default: https://quickbrush.online/api)"
+  "Hint": "Quickbrush API endpoint (default: https://quickbrush.ai/api)"
       },
       "SaveFolder": {
         "Name": "Image Save Folder",
@@ -54,7 +54,7 @@
       "Saved": "Image saved to {folder}",
       "GalleryUpdated": "Quickbrush Gallery updated",
       "RateLimit": "Rate limit exceeded. Please wait before generating another image.",
-      "InsufficientBrushstrokes": "Insufficient brushstrokes. Visit https://quickbrush.online/dashboard to purchase more."
+  "InsufficientBrushstrokes": "Insufficient brushstrokes. Visit https://quickbrush.ai/dashboard to purchase more."
     },
     "Gallery": {
       "Title": "Quickbrush Gallery",
