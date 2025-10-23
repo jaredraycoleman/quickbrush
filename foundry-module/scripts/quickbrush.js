@@ -596,29 +596,26 @@ class QuickbrushGallery {
    * Sync library images to gallery
    * Downloads missing images and adds them to the gallery
    */
+  /**
+   * Sync library from QuickBrush API (improved robust version)
+   * Downloads all images, saves metadata, and rebuilds gallery from scratch
+   */
   static async syncFromLibrary() {
     ui.notifications.info('Syncing Quickbrush library...');
 
     try {
       const api = new QuickbrushAPI();
       const folder = await this.getOrCreateFolder();
-      const journal = await this.getOrCreateGalleryJournal();
-
-      // Get the "Images" page specifically (not the About page)
-      let page = journal.pages.find(p => p.name === 'Images');
-
-      if (!page) {
-        // Create the Images page
-        const pages = await journal.createEmbeddedDocuments('JournalEntryPage', [{
-          name: 'Images',
-          type: 'text',
-          text: { content: '', format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML },
-          sort: 1 // Sort after the About page
-        }]);
-        page = pages[0];
+      const metadataFolder = `${folder}/.quickbrush-metadata`;
+      
+      // Create metadata folder
+      try {
+        await FilePicker.createDirectory('data', metadataFolder);
+      } catch (err) {
+        // Folder might already exist
       }
 
-      const currentContent = page.text.content || '';
+      const journal = await this.getOrCreateGalleryJournal();
 
       // Fetch all generations from API
       const response = await api.getGenerations(100);
@@ -629,71 +626,148 @@ class QuickbrushGallery {
         return;
       }
 
-      let addedCount = 0;
+      ui.notifications.info(`Downloading ${generations.length} images...`);
 
-      // Process each generation (in reverse so newest are at top)
-      for (const gen of generations.reverse()) {
+      let downloadedCount = 0;
+
+      // Download all images and save metadata
+      for (const gen of generations) {
         const generationId = gen.id;
 
-        // Skip if already in gallery (check by generation_id in HTML)
-        if (currentContent.includes(`quickbrush-${generationId}`)) {
-          continue;
-        }
-
         try {
+          // Sanitize filename
+          const sanitizedName = gen.image_name?.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-') || `quickbrush-${generationId}`;
+          const filename = `${sanitizedName}.webp`;
+          const metadataFilename = `${generationId}.json`;
+
           // Download image - construct full URL if relative
           let imageUrl = gen.image_url;
           if (imageUrl.startsWith('/')) {
-            // Remove /api from apiUrl if it exists, since gen.image_url already includes /api
             const baseUrl = api.apiUrl.replace(/\/api$/, '');
             imageUrl = `${baseUrl}${imageUrl}`;
           }
           const imageBlob = await api.downloadImage(imageUrl);
 
-          // Save to Foundry - use image name if available
-          let filename;
-          if (gen.image_name) {
-            const sanitized = gen.image_name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
-            filename = `${sanitized}.webp`;
-          } else {
-            filename = `quickbrush-${generationId}.webp`;
-          }
+          // Save image (overwrite if exists)
           const file = new File([imageBlob], filename, { type: 'image/webp' });
-          const uploadResult = await FilePicker.upload('data', folder, file);
+          const uploadResult = await FilePicker.upload('data', folder, file, { bucket: null });
 
-          // Create title with image name if available
-          const dateStr = new Date(gen.created_at).toLocaleString();
-          const title = gen.image_name ? `${gen.image_name} - ${dateStr}` : dateStr;
+          // Save metadata as JSON
+          const metadata = {
+            id: generationId,
+            image_name: gen.image_name,
+            image_path: uploadResult.path,
+            generation_type: gen.generation_type,
+            quality: gen.quality,
+            aspect_ratio: gen.aspect_ratio,
+            user_text: gen.user_text,
+            user_prompt: gen.user_prompt,
+            brushstrokes_used: gen.brushstrokes_used,
+            created_at: gen.created_at,
+            completed_at: gen.completed_at
+          };
 
-          // Add to gallery (prepend so it maintains chronological order)
-          const template = game.i18n.localize('QUICKBRUSH.Gallery.EntryTemplate');
-          const entry = template
-            .replace('{type}', (gen.generation_type || 'unknown').charAt(0).toUpperCase() + (gen.generation_type || 'unknown').slice(1))
-            .replace('{date}', title)
-            .replace('{description}', gen.user_text || 'No description')
-            .replace('{quality}', (gen.quality || 'medium').charAt(0).toUpperCase() + (gen.quality || 'medium').slice(1))
-            .replace('{aspectRatio}', 'N/A')
-            .replace('{imageUrl}', uploadResult.path);
+          // Save metadata to file
+          const metadataBlob = new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' });
+          const metadataFile = new File([metadataBlob], metadataFilename, { type: 'application/json' });
+          await FilePicker.upload('data', metadataFolder, metadataFile, { bucket: null });
 
-          // Prepend to gallery
-          const updatedContent = entry + (page.text.content || '');
-          await page.update({ 'text.content': updatedContent });
-
-          addedCount++;
+          downloadedCount++;
         } catch (err) {
-          console.error(`Failed to sync generation ${generationId}:`, err);
+          console.error(`Failed to download generation ${generationId}:`, err);
         }
       }
 
-      if (addedCount > 0) {
-        ui.notifications.info(`Synced ${addedCount} image${addedCount > 1 ? 's' : ''} from library`);
-      } else {
-        ui.notifications.info('Gallery is already up to date');
-      }
+      ui.notifications.info(`Downloaded ${downloadedCount} images. Rebuilding gallery...`);
+
+      // Now rebuild the gallery from metadata files
+      await this.rebuildGalleryFromMetadata(journal, metadataFolder, folder);
+
+      ui.notifications.info(`Gallery sync complete! ${downloadedCount} images synced.`);
 
     } catch (error) {
       console.error('Failed to sync library:', error);
       ui.notifications.error(`Failed to sync library: ${error.message}`);
+    }
+  }
+
+  /**
+   * Rebuild gallery journal from metadata files
+   * This ensures the gallery is always consistent with downloaded images
+   */
+  static async rebuildGalleryFromMetadata(journal, metadataFolder, imageFolder) {
+    try {
+      // Read all metadata files
+      const browse = await FilePicker.browse('data', metadataFolder);
+      const metadataFiles = browse.files.filter(f => f.endsWith('.json'));
+
+      if (metadataFiles.length === 0) {
+        console.log('Quickbrush | No metadata files found');
+        return;
+      }
+
+      // Fetch all metadata
+      const allMetadata = [];
+      for (const metadataPath of metadataFiles) {
+        try {
+          const response = await fetch(metadataPath);
+          const metadata = await response.json();
+          allMetadata.push(metadata);
+        } catch (err) {
+          console.error(`Failed to read metadata ${metadataPath}:`, err);
+        }
+      }
+
+      // Sort by creation date (most recent first)
+      allMetadata.sort((a, b) => {
+        const dateA = new Date(a.created_at);
+        const dateB = new Date(b.created_at);
+        return dateB - dateA;
+      });
+
+      // Get or create the Images page
+      let page = journal.pages.find(p => p.name === 'Images');
+
+      if (!page) {
+        const pages = await journal.createEmbeddedDocuments('JournalEntryPage', [{
+          name: 'Images',
+          type: 'text',
+          text: { content: '', format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML },
+          sort: 1
+        }]);
+        page = pages[0];
+      }
+
+      // Build HTML content from metadata
+      const template = game.i18n.localize('QUICKBRUSH.Gallery.EntryTemplate');
+      let htmlContent = '';
+
+      for (const meta of allMetadata) {
+        const dateStr = new Date(meta.created_at).toLocaleString();
+        const title = meta.image_name ? `${meta.image_name} - ${dateStr}` : dateStr;
+        const type = (meta.generation_type || 'unknown').charAt(0).toUpperCase() + (meta.generation_type || 'unknown').slice(1);
+        const quality = (meta.quality || 'medium').charAt(0).toUpperCase() + (meta.quality || 'medium').slice(1);
+        const aspectRatio = meta.aspect_ratio || 'N/A';
+
+        const entry = template
+          .replace('{type}', type)
+          .replace('{date}', title)
+          .replace('{description}', meta.user_text || 'No description')
+          .replace('{quality}', quality)
+          .replace('{aspectRatio}', aspectRatio)
+          .replace('{imageUrl}', meta.image_path);
+
+        htmlContent += entry;
+      }
+
+      // Update the page content entirely
+      await page.update({ 'text.content': htmlContent });
+
+      console.log(`Quickbrush | Rebuilt gallery with ${allMetadata.length} images`);
+
+    } catch (error) {
+      console.error('Failed to rebuild gallery:', error);
+      throw error;
     }
   }
 }
@@ -1137,9 +1211,19 @@ function addQuickbrushToActorSheet(app, html, actorType) {
   }
 
   const isCharacter = actorType === 'character';
-  const generationType = isCharacter ? 'character' : 'creature';
-  const label = isCharacter ? '🎭 Character' : '🐉 Creature';
-  const icon = isCharacter ? 'fa-user' : 'fa-dragon';
+  
+  // Determine generation type based on creature type
+  let generationType = isCharacter ? 'character' : 'creature';
+  
+  // For NPCs, check if they're humanoid
+  if (actorType === 'npc') {
+    const creatureType = actor.system.details?.type?.value || '';
+    const isHumanoid = creatureType.toLowerCase().includes('humanoid');
+    generationType = isHumanoid ? 'character' : 'creature';
+  }
+  
+  const label = generationType === 'character' ? '🎭 Character' : '🐉 Creature';
+  const icon = generationType === 'character' ? 'fa-user' : 'fa-dragon';
 
   const menuItem = $(`
     <li class="header-control" data-action="quickbrush-actor">
