@@ -709,20 +709,10 @@ def library():
 # ABOUT PAGE
 # ---------------------------------------------------------
 
-@app.route("/about")
-def about():
-    """About page - accessible to everyone."""
-    current_user = None
-    invitation_form_submitted = False
-
-    if "user" in session:
-        current_user = get_current_user()
-
-    return render_template(
-        "about.html",
-        current_user=current_user,
-        invitation_form_submitted=invitation_form_submitted
-    )
+@app.route("/showcase")
+def showcase():
+    """Showcase page - accessible to everyone."""
+    return render_template("showcase.html")
 
 
 @app.route("/redeem-invite", methods=["POST"])
