@@ -135,44 +135,11 @@
                     </p>
 
                     {% if session.user %}
-                        {% if current_user and current_user.has_valid_invite %}
-                            <div class="text-center my-4">
-                                <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">
-                                    <i class="bi bi-palette-fill"></i> Start Creating
-                                </a>
-                            </div>
-                        {% else %}
-                            <div class="alert alert-warning text-center">
-                                <h4 class="alert-heading">
-                                    <i class="bi bi-envelope-fill"></i> Invitation Required
-                                </h4>
-                                <p>
-                                    Quickbrush is currently in an early-access phase. You’ll need an invitation
-                                    code to start creating art.
-                                </p>
-                                {% if not invitation_form_submitted %}
-                                <form method="POST" action="{{ url_for('redeem_invite') }}" class="mt-3">
-                                    <div class="row justify-content-center">
-                                        <div class="col-md-6">
-                                            <div class="input-group">
-                                                <input type="text"
-                                                       class="form-control"
-                                                       name="invitation_code"
-                                                       placeholder="Enter your invitation code"
-                                                       required>
-                                                <button type="submit" class="btn btn-success">
-                                                    <i class="bi bi-check-circle"></i> Redeem
-                                                </button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </form>
-                                {% endif %}
-                                <p class="mt-3 mb-0 text-muted">
-                                    Contact an administrator to request an invitation code.
-                                </p>
-                            </div>
-                        {% endif %}
+                        <div class="text-center my-4">
+                            <a href="{{ url_for('dashboard') }}" class="btn btn-primary btn-lg">
+                                <i class="bi bi-palette-fill"></i> Start Creating
+                            </a>
+                        </div>
                     {% else %}
                         <div class="text-center my-4">
                             <a href="{{ url_for('login') }}" class="btn btn-primary btn-lg">

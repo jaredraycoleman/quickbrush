@@ -12,61 +12,9 @@
         </div>
     </div>
 
-    <!-- Settings Card -->
-    <div class="row mb-4">
-        <div class="col-12">
-            <div class="card border-dark">
-                <div class="card-header bg-dark text-white">
-                    <h5 class="mb-0"><i class="bi bi-gear-fill"></i> Application Settings</h5>
-                </div>
-                <div class="card-body">
-                    <div class="row align-items-center">
-                        <div class="col-md-4">
-                            <div class="form-check form-switch">
-                                <input class="form-check-input"
-                                       type="checkbox"
-                                       id="inviteCodesToggle"
-                                       {% if app_settings.invite_codes_enabled %}checked{% endif %}
-                                       onchange="toggleInviteCodes(this.checked)">
-                                <label class="form-check-label fw-bold" for="inviteCodesToggle">
-                                    Require Invitation Codes
-                                </label>
-                                <div class="form-text">
-                                    {% if app_settings.invite_codes_enabled %}
-                                        <span class="text-danger"><i class="bi bi-lock-fill"></i> Invitations required for new users</span>
-                                    {% else %}
-                                        <span class="text-success"><i class="bi bi-unlock-fill"></i> All users auto-activated on login</span>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <button class="btn btn-danger" onclick="bulkRevokeAccess()">
-                                <i class="bi bi-person-x-fill"></i> Bulk Revoke Access
-                            </button>
-                            <div class="form-text">
-                                Revoke access for users with 0 tokens and no active subscription
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <small class="text-muted">
-                                {% if app_settings.updated_at %}
-                                    Last updated: {{ app_settings.updated_at.strftime('%Y-%m-%d %H:%M') }}<br>
-                                    {% if app_settings.updated_by %}
-                                        by {{ app_settings.updated_by }}
-                                    {% endif %}
-                                {% endif %}
-                            </small>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- Statistics Cards -->
     <div class="row mb-4">
-        <div class="col-md-3">
+        <div class="col-md-6">
             <div class="card bg-primary text-white">
                 <div class="card-body">
                     <h5 class="card-title">Total Users</h5>
@@ -74,246 +22,88 @@
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="card bg-success text-white">
+        <div class="col-md-6">
+            <div class="card bg-danger text-white">
                 <div class="card-body">
-                    <h5 class="card-title">With Access</h5>
-                    <h2 class="mb-0">{{ stats.users_with_access }}</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-warning text-white">
-                <div class="card-body">
-                    <h5 class="card-title">Without Access</h5>
-                    <h2 class="mb-0">{{ stats.users_without_access }}</h2>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="card bg-info text-white">
-                <div class="card-body">
-                    <h5 class="card-title">Available Codes</h5>
-                    <h2 class="mb-0">{{ stats.available_codes }}</h2>
+                    <h5 class="card-title">Admin Users</h5>
+                    <h2 class="mb-0">{{ stats.admin_users }}</h2>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Tabs -->
-    <ul class="nav nav-tabs mb-4" id="adminTabs" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button">
-                <i class="bi bi-people-fill"></i> User Management
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="invites-tab" data-bs-toggle="tab" data-bs-target="#invites" type="button">
-                <i class="bi bi-envelope-fill"></i> Invitation Codes
-            </button>
-        </li>
-    </ul>
-
-    <!-- Tab Content -->
-    <div class="tab-content" id="adminTabsContent">
-        <!-- User Management Tab -->
-        <div class="tab-pane fade show active" id="users" role="tabpanel">
-            <!-- Search -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <form method="GET" action="{{ url_for('admin_panel') }}">
-                        <div class="row">
-                            <div class="col-md-10">
-                                <input type="text"
-                                       class="form-control"
-                                       name="search"
-                                       placeholder="Search users by email, name, or Auth0 ID..."
-                                       value="{{ search_query or '' }}">
-                            </div>
-                            <div class="col-md-2">
-                                <button type="submit" class="btn btn-primary w-100">
-                                    <i class="bi bi-search"></i> Search
-                                </button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Users Table -->
-            <div class="card">
-                <div class="card-body">
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Email</th>
-                                    <th>Name</th>
-                                    <th>Access</th>
-                                    <th>Admin</th>
-                                    <th>Tokens</th>
-                                    <th>Created</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {% for user in users %}
-                                <tr {% if not user.has_valid_invite %}class="table-secondary"{% endif %}>
-                                    <td>
-                                        <small class="text-muted">{{ user.email }}</small>
-                                    </td>
-                                    <td>{{ user.name or 'N/A' }}</td>
-                                    <td>
-                                        {% if user.has_valid_invite %}
-                                            <span class="badge bg-success">Has Access</span>
-                                        {% else %}
-                                            <span class="badge bg-warning">No Access</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if user.is_admin %}
-                                            <span class="badge bg-danger">Admin</span>
-                                        {% else %}
-                                            <span class="badge bg-secondary">User</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>{{ user.purchased_brushstrokes }}</td>
-                                    <td>
-                                        <small>{{ user.created_at.strftime('%Y-%m-%d') }}</small>
-                                    </td>
-                                    <td>
-                                        <button class="btn btn-sm btn-info"
-                                                data-bs-toggle="modal"
-                                                data-bs-target="#userModal"
-                                                onclick="loadUserDetails('{{ user.id }}')">
-                                            <i class="bi bi-eye"></i> View
-                                        </button>
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
+    <!-- User Management -->
+    <!-- Search -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('admin_panel') }}">
+                <div class="row">
+                    <div class="col-md-10">
+                        <input type="text"
+                               class="form-control"
+                               name="search"
+                               placeholder="Search users by email, name, or Auth0 ID..."
+                               value="{{ search_query or '' }}">
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary w-100">
+                            <i class="bi bi-search"></i> Search
+                        </button>
                     </div>
                 </div>
-            </div>
+            </form>
         </div>
+    </div>
 
-        <!-- Invitation Codes Tab -->
-        <div class="tab-pane fade" id="invites" role="tabpanel">
-            <!-- Create New Code -->
-            <div class="card mb-4">
-                <div class="card-body">
-                    <h5 class="card-title">Create New Invitation Code</h5>
-                    <form method="POST" action="{{ url_for('admin_create_invite') }}">
-                        <div class="row align-items-end">
-                            <div class="col-md-6">
-                                <label class="form-label">Description (optional)</label>
-                                <input type="text"
-                                       class="form-control"
-                                       name="description"
-                                       placeholder="e.g., 'For John Smith'">
-                            </div>
-                            <div class="col-md-4">
-                                <label class="form-label">Expiration (optional)</label>
-                                <input type="datetime-local"
-                                       class="form-control"
-                                       name="expires_at">
-                            </div>
-                            <div class="col-md-2">
-                                <button type="submit" class="btn btn-success w-100">
-                                    <i class="bi bi-plus-circle"></i> Create
+    <!-- Users Table -->
+    <div class="card">
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th>Email</th>
+                            <th>Name</th>
+                            <th>Admin</th>
+                            <th>Tokens</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for user in users %}
+                        <tr>
+                            <td>
+                                <small class="text-muted">{{ user.email }}</small>
+                            </td>
+                            <td>{{ user.name or 'N/A' }}</td>
+                            <td>
+                                {% if user.is_admin %}
+                                    <span class="badge bg-danger">Admin</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">User</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ user.purchased_brushstrokes }}</td>
+                            <td>
+                                <small>{{ user.created_at.strftime('%Y-%m-%d') }}</small>
+                            </td>
+                            <td>
+                                <button class="btn btn-sm btn-info"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#userModal"
+                                        onclick="loadUserDetails('{{ user.id }}')">
+                                    <i class="bi bi-eye"></i> View
                                 </button>
-                            </div>
-                        </div>
-                    </form>
-                </div>
-            </div>
-
-            <!-- Invitation Codes Table -->
-            <div class="card">
-                <div class="card-body">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="card-title mb-0">Invitation Codes</h5>
-                        <div class="form-check form-switch">
-                            <input class="form-check-input"
-                                   type="checkbox"
-                                   id="showUsedCodes"
-                                   onchange="toggleUsedCodes(this.checked)">
-                            <label class="form-check-label" for="showUsedCodes">
-                                Show used codes
-                            </label>
-                        </div>
-                    </div>
-
-                    <div class="table-responsive">
-                        <table class="table table-hover">
-                            <thead>
-                                <tr>
-                                    <th>Code</th>
-                                    <th>Description</th>
-                                    <th>Status</th>
-                                    <th>Created By</th>
-                                    <th>Created</th>
-                                    <th>Used By</th>
-                                    <th>Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="inviteCodesTable">
-                                {% for code in invitation_codes %}
-                                <tr class="{% if code.is_used %}used-code d-none{% endif %}">
-                                    <td>
-                                        <code class="text-primary">{{ code.code }}</code>
-                                        <button class="btn btn-sm btn-link"
-                                                onclick="copyToClipboard('{{ code.code }}')">
-                                            <i class="bi bi-clipboard"></i>
-                                        </button>
-                                    </td>
-                                    <td>{{ code.description or '-' }}</td>
-                                    <td>
-                                        {% if code.is_used %}
-                                            <span class="badge bg-secondary">Used</span>
-                                        {% elif code.expires_at and code.expires_at < now %}
-                                            <span class="badge bg-danger">Expired</span>
-                                        {% else %}
-                                            <span class="badge bg-success">Available</span>
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        <small>{{ code.created_by.email if code.created_by else 'Unknown' }}</small>
-                                    </td>
-                                    <td>
-                                        <small>{{ code.created_at.strftime('%Y-%m-%d %H:%M') }}</small>
-                                    </td>
-                                    <td>
-                                        {% if code.used_by %}
-                                            <small class="text-muted">{{ code.used_by.email }}</small>
-                                            <br>
-                                            <small class="text-muted">{{ code.used_at.strftime('%Y-%m-%d') if code.used_at else '' }}</small>
-                                        {% else %}
-                                            -
-                                        {% endif %}
-                                    </td>
-                                    <td>
-                                        {% if not code.is_used %}
-                                        <form method="POST"
-                                              action="{{ url_for('admin_delete_invite', code_id=code.id) }}"
-                                              style="display: inline;"
-                                              onsubmit="return confirm('Delete this invitation code?');">
-                                            <button type="submit" class="btn btn-sm btn-danger">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </form>
-                                        {% endif %}
-                                    </td>
-                                </tr>
-                                {% endfor %}
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
+
 </div>
 
 <!-- User Details Modal -->
@@ -336,23 +126,6 @@
 </div>
 
 <script>
-function copyToClipboard(text) {
-    navigator.clipboard.writeText(text).then(() => {
-        alert('Code copied to clipboard!');
-    });
-}
-
-function toggleUsedCodes(show) {
-    const usedRows = document.querySelectorAll('.used-code');
-    usedRows.forEach(row => {
-        if (show) {
-            row.classList.remove('d-none');
-        } else {
-            row.classList.add('d-none');
-        }
-    });
-}
-
 function loadUserDetails(userId) {
     const modalBody = document.getElementById('userModalBody');
     modalBody.innerHTML = '<div class="text-center"><div class="spinner-border" role="status"></div></div>';
@@ -379,9 +152,8 @@ function loadUserDetails(userId) {
                         </table>
                     </div>
                     <div class="col-md-6">
-                        <h6>Access & Tokens</h6>
+                        <h6>Account & Tokens</h6>
                         <table class="table table-sm">
-                            <tr><th>Access:</th><td>${user.has_access ? '<span class="badge bg-success">Has Access</span>' : '<span class="badge bg-warning">No Access</span>'}</td></tr>
                             <tr><th>Admin:</th><td>${user.is_admin ? '<span class="badge bg-danger">Yes</span>' : 'No'}</td></tr>
                             <tr><th>Purchased Tokens:</th><td>${user.purchased_brushstrokes}</td></tr>
                             <tr><th>Stripe ID:</th><td><small>${user.stripe_customer_id || 'N/A'}</small></td></tr>
@@ -401,9 +173,6 @@ function loadUserDetails(userId) {
                     </button>
                     <button class="btn btn-warning" onclick="toggleAdminStatus('${user._id}')">
                         <i class="bi bi-shield"></i> Toggle Admin
-                    </button>
-                    <button class="btn ${user.has_access ? 'btn-danger' : 'btn-success'}" onclick="toggleAccess('${user._id}')">
-                        <i class="bi bi-key"></i> ${user.has_access ? 'Revoke Access' : 'Grant Access'}
                     </button>
                 </div>
                 <div class="btn-group mb-3" role="group">
@@ -452,18 +221,6 @@ function loadUserDetails(userId) {
                     </div>
                 </div>
             `;
-
-            if (data.invitation_info) {
-                html += `
-                    <hr>
-                    <h6>Invitation Info</h6>
-                    <table class="table table-sm">
-                        <tr><th>Code:</th><td><code>${data.invitation_info.code}</code></td></tr>
-                        <tr><th>Created By:</th><td>${data.invitation_info.created_by}</td></tr>
-                        <tr><th>Created:</th><td>${new Date(data.invitation_info.created_at).toLocaleDateString()}</td></tr>
-                    </table>
-                `;
-            }
 
             if (data.recent_transactions && data.recent_transactions.length > 0) {
                 html += `
@@ -568,89 +325,6 @@ function toggleAdminStatus(userId) {
     });
 }
 
-function grantAccess(userId) {
-    if (!confirm('Grant full access to this user?')) return;
-
-    fetch('/admin/grant-access', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({user_id: userId})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert('Access granted!');
-            loadUserDetails(userId);
-            location.reload();
-        } else {
-            alert('Error: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        alert('Error granting access');
-        console.error(error);
-    });
-}
-
-function toggleInviteCodes(enabled) {
-    const message = enabled
-        ? 'Enable invitation codes? Users will need codes to access the app.'
-        : 'Disable invitation codes? All users will be auto-activated on login.';
-
-    if (!confirm(message)) {
-        // Revert checkbox
-        document.getElementById('inviteCodesToggle').checked = !enabled;
-        return;
-    }
-
-    fetch('/admin/toggle-invite-codes', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'}
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const status = data.invite_codes_enabled ? 'enabled' : 'disabled';
-            alert(`Invitation codes ${status} successfully!`);
-            location.reload();
-        } else {
-            alert('Error: ' + (data.error || 'Unknown error'));
-            // Revert checkbox
-            document.getElementById('inviteCodesToggle').checked = !enabled;
-        }
-    })
-    .catch(error => {
-        alert('Error toggling invite codes');
-        console.error(error);
-        // Revert checkbox
-        document.getElementById('inviteCodesToggle').checked = !enabled;
-    });
-}
-
-function bulkRevokeAccess() {
-    if (!confirm('Revoke access for all users with 0 tokens and no active subscription?\n\nAccess will be automatically granted if they log in while invite codes are disabled.')) {
-        return;
-    }
-
-    fetch('/admin/bulk-revoke-access', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'}
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            alert(`Successfully revoked access for ${data.count} user(s).`);
-            location.reload();
-        } else {
-            alert('Error: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        alert('Error revoking access');
-        console.error(error);
-    });
-}
-
 function submitRemoveTokens(event, userId) {
     event.preventDefault();
     const form = event.target;
@@ -677,31 +351,6 @@ function submitRemoveTokens(event, userId) {
     })
     .catch(error => {
         alert('Error removing tokens');
-        console.error(error);
-    });
-}
-
-function toggleAccess(userId) {
-    if (!confirm('Toggle access for this user?\n\nNote: If invite codes are disabled, users without access will auto-regain it when they visit the site.')) return;
-
-    fetch('/admin/toggle-access', {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({user_id: userId})
-    })
-    .then(response => response.json())
-    .then(data => {
-        if (data.success) {
-            const status = data.has_access ? 'granted' : 'revoked';
-            alert(`Access ${status} successfully!`);
-            loadUserDetails(userId);
-            location.reload();
-        } else {
-            alert('Error: ' + (data.error || 'Unknown error'));
-        }
-    })
-    .catch(error => {
-        alert('Error toggling access');
         console.error(error);
     });
 }

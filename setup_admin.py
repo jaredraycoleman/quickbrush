@@ -3,7 +3,7 @@
 Setup script to create the first admin user.
 
 This script should be run once to set up your first admin user.
-After that, admins can create invitation codes and manage other users.
+After that, admins can manage other users.
 
 Usage:
     python3 setup_admin.py <email>
@@ -48,7 +48,6 @@ def setup_admin(email: str):
 
     # Make admin
     user.is_admin = True
-    user.has_valid_invite = True  # Admins always have access
     user.save()
 
     print(f"✅ Success! User '{email}' is now an admin.")
@@ -57,13 +56,11 @@ def setup_admin(email: str):
     print(f"  Email: {user.email}")
     print(f"  Auth0 ID: {user.auth0_sub}")
     print(f"  Admin: {user.is_admin}")
-    print(f"  Has Access: {user.has_valid_invite}")
 
     print("\n🎉 You can now:")
     print("  1. Log in to the application")
     print("  2. Navigate to the Admin panel")
-    print("  3. Create invitation codes for other users")
-    print("  4. Manage users and gift tokens")
+    print("  3. Manage users and gift tokens")
 
     return True
 
