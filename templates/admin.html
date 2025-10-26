@@ -12,6 +12,58 @@
         </div>
     </div>
 
+    <!-- Settings Card -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card border-dark">
+                <div class="card-header bg-dark text-white">
+                    <h5 class="mb-0"><i class="bi bi-gear-fill"></i> Application Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row align-items-center">
+                        <div class="col-md-4">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input"
+                                       type="checkbox"
+                                       id="inviteCodesToggle"
+                                       {% if app_settings.invite_codes_enabled %}checked{% endif %}
+                                       onchange="toggleInviteCodes(this.checked)">
+                                <label class="form-check-label fw-bold" for="inviteCodesToggle">
+                                    Require Invitation Codes
+                                </label>
+                                <div class="form-text">
+                                    {% if app_settings.invite_codes_enabled %}
+                                        <span class="text-danger"><i class="bi bi-lock-fill"></i> Invitations required for new users</span>
+                                    {% else %}
+                                        <span class="text-success"><i class="bi bi-unlock-fill"></i> All users auto-activated on login</span>
+                                    {% endif %}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-danger" onclick="bulkRevokeAccess()">
+                                <i class="bi bi-person-x-fill"></i> Bulk Revoke Access
+                            </button>
+                            <div class="form-text">
+                                Revoke access for users with 0 tokens and no active subscription
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <small class="text-muted">
+                                {% if app_settings.updated_at %}
+                                    Last updated: {{ app_settings.updated_at.strftime('%Y-%m-%d %H:%M') }}<br>
+                                    {% if app_settings.updated_by %}
+                                        by {{ app_settings.updated_by }}
+                                    {% endif %}
+                                {% endif %}
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <!-- Statistics Cards -->
     <div class="row mb-4">
         <div class="col-md-3">
@@ -26,7 +78,7 @@
             <div class="card bg-success text-white">
                 <div class="card-body">
                     <h5 class="card-title">With Access</h5>
-                    <h2 class="mb-0">{{ stats.users_with_invites }}</h2>
+                    <h2 class="mb-0">{{ stats.users_with_access }}</h2>
                 </div>
             </div>
         </div>
@@ -34,7 +86,7 @@
             <div class="card bg-warning text-white">
                 <div class="card-body">
                     <h5 class="card-title">Without Access</h5>
-                    <h2 class="mb-0">{{ stats.users_without_invites }}</h2>
+                    <h2 class="mb-0">{{ stats.users_without_access }}</h2>
                 </div>
             </div>
         </div>
@@ -106,16 +158,16 @@
                             </thead>
                             <tbody>
                                 {% for user in users %}
-                                <tr>
+                                <tr {% if not user.has_valid_invite %}class="table-secondary"{% endif %}>
                                     <td>
                                         <small class="text-muted">{{ user.email }}</small>
                                     </td>
                                     <td>{{ user.name or 'N/A' }}</td>
                                     <td>
                                         {% if user.has_valid_invite %}
-                                            <span class="badge bg-success">Yes</span>
+                                            <span class="badge bg-success">Has Access</span>
                                         {% else %}
-                                            <span class="badge bg-warning">No</span>
+                                            <span class="badge bg-warning">No Access</span>
                                         {% endif %}
                                     </td>
                                     <td>
@@ -329,8 +381,8 @@ function loadUserDetails(userId) {
                     <div class="col-md-6">
                         <h6>Access & Tokens</h6>
                         <table class="table table-sm">
+                            <tr><th>Access:</th><td>${user.has_access ? '<span class="badge bg-success">Has Access</span>' : '<span class="badge bg-warning">No Access</span>'}</td></tr>
                             <tr><th>Admin:</th><td>${user.is_admin ? '<span class="badge bg-danger">Yes</span>' : 'No'}</td></tr>
-                            <tr><th>Has Access:</th><td>${user.has_valid_invite ? '<span class="badge bg-success">Yes</span>' : '<span class="badge bg-warning">No</span>'}</td></tr>
                             <tr><th>Purchased Tokens:</th><td>${user.purchased_brushstrokes}</td></tr>
                             <tr><th>Stripe ID:</th><td><small>${user.stripe_customer_id || 'N/A'}</small></td></tr>
                         </table>
@@ -344,14 +396,20 @@ function loadUserDetails(userId) {
                     <button class="btn btn-primary" onclick="showGiftTokensForm('${user._id}')">
                         <i class="bi bi-gift"></i> Gift Tokens
                     </button>
+                    <button class="btn btn-danger" onclick="showRemoveTokensForm('${user._id}')">
+                        <i class="bi bi-dash-circle"></i> Remove Tokens
+                    </button>
                     <button class="btn btn-warning" onclick="toggleAdminStatus('${user._id}')">
                         <i class="bi bi-shield"></i> Toggle Admin
                     </button>
-                    ${!user.has_valid_invite ? `
-                    <button class="btn btn-success" onclick="grantAccess('${user._id}')">
-                        <i class="bi bi-check-circle"></i> Grant Access
+                    <button class="btn ${user.has_access ? 'btn-danger' : 'btn-success'}" onclick="toggleAccess('${user._id}')">
+                        <i class="bi bi-key"></i> ${user.has_access ? 'Revoke Access' : 'Grant Access'}
                     </button>
-                    ` : ''}
+                </div>
+                <div class="btn-group mb-3" role="group">
+                    <button class="btn btn-danger" onclick="deleteUserAccount('${user._id}', '${user.email}')">
+                        <i class="bi bi-trash-fill"></i> Delete Account
+                    </button>
                 </div>
 
                 <div id="giftTokensForm" class="d-none">
@@ -369,6 +427,26 @@ function loadUserDetails(userId) {
                                 </div>
                                 <button type="submit" class="btn btn-success">Submit</button>
                                 <button type="button" class="btn btn-secondary" onclick="hideGiftTokensForm()">Cancel</button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="removeTokensForm" class="d-none">
+                    <div class="card bg-light border-danger">
+                        <div class="card-body">
+                            <h6 class="text-danger">Remove Tokens</h6>
+                            <form onsubmit="submitRemoveTokens(event, '${user._id}')">
+                                <div class="mb-3">
+                                    <label class="form-label">Amount (max: ${user.purchased_brushstrokes})</label>
+                                    <input type="number" class="form-control" name="amount" min="1" max="${user.purchased_brushstrokes}" required>
+                                </div>
+                                <div class="mb-3">
+                                    <label class="form-label">Description (optional)</label>
+                                    <input type="text" class="form-control" name="description" placeholder="e.g., 'Refund processed'">
+                                </div>
+                                <button type="submit" class="btn btn-danger">Remove</button>
+                                <button type="button" class="btn btn-secondary" onclick="hideRemoveTokensForm()">Cancel</button>
                             </form>
                         </div>
                     </div>
@@ -424,10 +502,20 @@ function loadUserDetails(userId) {
 
 function showGiftTokensForm(userId) {
     document.getElementById('giftTokensForm').classList.remove('d-none');
+    document.getElementById('removeTokensForm').classList.add('d-none');
 }
 
 function hideGiftTokensForm() {
     document.getElementById('giftTokensForm').classList.add('d-none');
+}
+
+function showRemoveTokensForm(userId) {
+    document.getElementById('removeTokensForm').classList.remove('d-none');
+    document.getElementById('giftTokensForm').classList.add('d-none');
+}
+
+function hideRemoveTokensForm() {
+    document.getElementById('removeTokensForm').classList.add('d-none');
 }
 
 function submitGiftTokens(event, userId) {
@@ -500,6 +588,152 @@ function grantAccess(userId) {
     })
     .catch(error => {
         alert('Error granting access');
+        console.error(error);
+    });
+}
+
+function toggleInviteCodes(enabled) {
+    const message = enabled
+        ? 'Enable invitation codes? Users will need codes to access the app.'
+        : 'Disable invitation codes? All users will be auto-activated on login.';
+
+    if (!confirm(message)) {
+        // Revert checkbox
+        document.getElementById('inviteCodesToggle').checked = !enabled;
+        return;
+    }
+
+    fetch('/admin/toggle-invite-codes', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const status = data.invite_codes_enabled ? 'enabled' : 'disabled';
+            alert(`Invitation codes ${status} successfully!`);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+            // Revert checkbox
+            document.getElementById('inviteCodesToggle').checked = !enabled;
+        }
+    })
+    .catch(error => {
+        alert('Error toggling invite codes');
+        console.error(error);
+        // Revert checkbox
+        document.getElementById('inviteCodesToggle').checked = !enabled;
+    });
+}
+
+function bulkRevokeAccess() {
+    if (!confirm('Revoke access for all users with 0 tokens and no active subscription?\n\nAccess will be automatically granted if they log in while invite codes are disabled.')) {
+        return;
+    }
+
+    fetch('/admin/bulk-revoke-access', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert(`Successfully revoked access for ${data.count} user(s).`);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error revoking access');
+        console.error(error);
+    });
+}
+
+function submitRemoveTokens(event, userId) {
+    event.preventDefault();
+    const form = event.target;
+    const amount = form.amount.value;
+    const description = form.description.value;
+
+    if (!confirm(`Remove ${amount} token(s) from this user?`)) {
+        return;
+    }
+
+    fetch('/admin/remove-tokens', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId, amount: parseInt(amount), description})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('Tokens removed successfully!');
+            loadUserDetails(userId);
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error removing tokens');
+        console.error(error);
+    });
+}
+
+function toggleAccess(userId) {
+    if (!confirm('Toggle access for this user?\n\nNote: If invite codes are disabled, users without access will auto-regain it when they visit the site.')) return;
+
+    fetch('/admin/toggle-access', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            const status = data.has_access ? 'granted' : 'revoked';
+            alert(`Access ${status} successfully!`);
+            loadUserDetails(userId);
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error toggling access');
+        console.error(error);
+    });
+}
+
+function deleteUserAccount(userId, email) {
+    const confirmMsg = `DELETE USER ACCOUNT?\n\nEmail: ${email}\n\nThis will permanently delete:\n- User account\n- All generations\n- All transactions\n- API keys\n\nThis action CANNOT be undone!\n\nType the email address to confirm:`;
+
+    const confirmEmail = prompt(confirmMsg);
+
+    if (confirmEmail !== email) {
+        if (confirmEmail !== null) {
+            alert('Email did not match. Deletion cancelled.');
+        }
+        return;
+    }
+
+    fetch('/admin/delete-user', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({user_id: userId})
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('User account deleted successfully!');
+            location.reload();
+        } else {
+            alert('Error: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Error deleting user account');
         console.error(error);
     });
 }

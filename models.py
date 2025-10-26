@@ -578,6 +578,41 @@ class RateLimit(Document):
 
 
 # ========================================
+# SETTINGS MODEL
+# ========================================
+
+class AppSettings(Document):
+    """
+    Application-wide settings.
+
+    This is a singleton collection with a single document to store global app settings.
+    """
+    # Invitation system
+    invite_codes_enabled = BooleanField(default=True)  # Whether invitation codes are required
+
+    # Metadata
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    updated_by = ReferenceField(User)  # Last admin who updated settings
+
+    meta = {
+        'collection': 'app_settings',
+        'indexes': []
+    }
+
+    def __str__(self):
+        return f"AppSettings(invite_codes_enabled={self.invite_codes_enabled})"
+
+    @staticmethod
+    def get_settings() -> 'AppSettings':
+        """Get or create the singleton settings document."""
+        settings = AppSettings.objects().first()  # type: ignore
+        if not settings:
+            settings = AppSettings(invite_codes_enabled=True)
+            settings.save()
+        return settings
+
+
+# ========================================
 # HELPER FUNCTIONS
 # ========================================
 

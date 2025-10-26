@@ -94,6 +94,16 @@ def get_current_user() -> Optional[User]:
     # Check if subscription needs renewal
     check_and_renew_subscription(user)
 
+    # Auto-grant access if invite codes are disabled globally
+    # This ensures any logged-in user gets access when invite codes are disabled
+    if not user.is_admin and not user.has_valid_invite:
+        from models import AppSettings
+        settings = AppSettings.get_settings()
+
+        if not settings.invite_codes_enabled:
+            user.has_valid_invite = True
+            user.save()
+
     return user
 
 # ---------------------------------------------------------
@@ -722,12 +732,12 @@ def redeem_invite():
     user = get_current_user()
     if not user:
         flash("Error loading user data", "danger")
-        return redirect(url_for("about"))
+        return redirect(url_for("index"))
 
     code = request.form.get("invitation_code", "").strip()
     if not code:
         flash("Please enter an invitation code.", "warning")
-        return redirect(url_for("about"))
+        return redirect(url_for("index"))
 
     # Import here to avoid circular dependency
     from admin_service import redeem_invitation_code
@@ -738,7 +748,7 @@ def redeem_invite():
         return redirect(url_for("dashboard"))
     else:
         flash(message, "danger")
-        return redirect(url_for("about"))
+        return redirect(url_for("index"))
 
 
 # ---------------------------------------------------------
@@ -750,7 +760,7 @@ def redeem_invite():
 @admin_required
 def admin_panel():
     """Admin panel for user management."""
-    from admin_service import search_users, get_invitation_codes, get_user_stats
+    from admin_service import search_users, get_invitation_codes, get_user_stats, get_app_settings
     from datetime import datetime, timezone
 
     # Get search query if any
@@ -765,11 +775,15 @@ def admin_panel():
     # Get statistics
     stats = get_user_stats()
 
+    # Get app settings
+    app_settings = get_app_settings()
+
     return render_template(
         "admin.html",
         users=users,
         invitation_codes=invitation_codes,
         stats=stats,
+        app_settings=app_settings,
         search_query=search_query,
         now=datetime.now(timezone.utc)
     )
@@ -794,7 +808,7 @@ def admin_user_details(user_id: str):
         "name": user.name,
         "auth0_sub": user.auth0_sub,
         "is_admin": user.is_admin,
-        "has_valid_invite": user.has_valid_invite,
+        "has_access": user.has_valid_invite,
         "purchased_brushstrokes": user.purchased_brushstrokes,
         "stripe_customer_id": user.stripe_customer_id,
         "created_at": user.created_at.isoformat() if user.created_at else None,
@@ -942,6 +956,115 @@ def admin_delete_invite(code_id: str):
         flash("Failed to delete invitation code", "danger")
 
     return redirect(url_for("admin_panel"))
+
+
+@app.route("/admin/toggle-invite-codes", methods=["POST"])
+@login_required
+@admin_required
+def admin_toggle_invite_codes():
+    """Toggle the global invite codes requirement."""
+    from admin_service import toggle_invite_codes
+
+    admin_user = get_current_user()
+    if not admin_user:
+        return {"error": "Admin user not found"}, 401
+
+    try:
+        new_value = toggle_invite_codes(admin_user)
+        return {"success": True, "invite_codes_enabled": new_value}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route("/admin/bulk-revoke-access", methods=["POST"])
+@login_required
+@admin_required
+def admin_bulk_revoke_access():
+    """Bulk revoke access for users with no tokens and no subscription."""
+    from admin_service import bulk_revoke_access
+
+    try:
+        count = bulk_revoke_access()
+        return {"success": True, "count": count}
+    except Exception as e:
+        return {"error": str(e)}, 500
+
+
+@app.route("/admin/toggle-access", methods=["POST"])
+@login_required
+@admin_required
+def admin_toggle_access():
+    """Toggle access for a user (AJAX endpoint)."""
+    from admin_service import toggle_access
+
+    data = request.get_json()
+    user_id = data.get("user_id")
+
+    if not user_id:
+        return {"error": "Missing user_id"}, 400
+
+    new_status = toggle_access(user_id)
+    if new_status is not None:
+        return {"success": True, "has_access": new_status}
+    else:
+        return {"error": "User not found"}, 404
+
+
+@app.route("/admin/remove-tokens", methods=["POST"])
+@login_required
+@admin_required
+def admin_remove_tokens():
+    """Remove tokens from a user (AJAX endpoint)."""
+    from admin_service import remove_tokens
+
+    admin_user = get_current_user()
+    if not admin_user:
+        return {"error": "Admin user not found"}, 401
+
+    data = request.get_json()
+    user_id = data.get("user_id")
+    amount = data.get("amount")
+    description = data.get("description", "")
+
+    if not user_id or not amount:
+        return {"error": "Missing required fields"}, 400
+
+    try:
+        amount = int(amount)
+        if amount <= 0:
+            return {"error": "Amount must be positive"}, 400
+    except ValueError:
+        return {"error": "Invalid amount"}, 400
+
+    success = remove_tokens(admin_user, user_id, amount, description)
+    if success:
+        return {"success": True}
+    else:
+        return {"error": "Failed to remove tokens"}, 500
+
+
+@app.route("/admin/delete-user", methods=["POST"])
+@login_required
+@admin_required
+def admin_delete_user():
+    """Delete a user account (AJAX endpoint)."""
+    from admin_service import delete_user_account
+
+    admin_user = get_current_user()
+    if not admin_user:
+        return {"error": "Admin user not found"}, 401
+
+    data = request.get_json()
+    user_id = data.get("user_id")
+
+    if not user_id:
+        return {"error": "Missing user_id"}, 400
+
+    success = delete_user_account(admin_user, user_id)
+    if success:
+        return {"success": True}
+    else:
+        return {"error": "Failed to delete user. Cannot delete admin accounts."}, 500
 
 
 # ---------------------------------------------------------

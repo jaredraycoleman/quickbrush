@@ -25,12 +25,13 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated
 
-def invite_required(f):
+def access_required(f):
     """
-    Require user to have a valid invitation code.
+    Require user to have access to the application.
 
-    Users without an invitation can only access the about page.
+    Users without access are redirected to the home page.
     Admins automatically have access.
+    Access is automatically granted when invite codes are disabled globally.
     """
     @wraps(f)
     def decorated(*args, **kwargs):
@@ -57,13 +58,16 @@ def invite_required(f):
         if user.is_admin:
             return f(*args, **kwargs)
 
-        # Check if user has valid invitation
+        # Check if user has access
         if not user.has_valid_invite:
-            flash("You need an invitation code to access this feature. Please contact an administrator.", "warning")
-            return redirect(url_for("about"))
+            flash("You need access to use this feature. Please contact an administrator or use an invitation code.", "warning")
+            return redirect(url_for("index"))
 
         return f(*args, **kwargs)
     return decorated
+
+# Keep old name for backward compatibility
+invite_required = access_required
 
 def admin_required(f):
     """Require user to be an admin."""
@@ -90,7 +94,7 @@ def admin_required(f):
 
         if not user.is_admin:
             flash("You need admin privileges to access this page.", "danger")
-            return redirect(url_for("about"))
+            return redirect(url_for("index"))
 
         return f(*args, **kwargs)
     return decorated
