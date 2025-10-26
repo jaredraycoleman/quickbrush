@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}OAuth Applications{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-12">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+      <h2><i class="bi bi-code-square"></i> OAuth Applications</h2>
+      <a href="{{ url_for('create_developer_app') }}" class="btn btn-primary">
+        <i class="bi bi-plus-circle"></i> Create Application
+      </a>
+    </div>
+
+    <div class="alert alert-info">
+      <i class="bi bi-info-circle"></i>
+      <strong>OAuth Applications</strong> allow third-party services (like custom GPTs) to access the Quickbrush API on behalf of users.
+      As an admin, you can create and manage all OAuth applications for the platform.
+    </div>
+
+    {% if apps %}
+      <div class="row">
+        {% for app in apps %}
+          <div class="col-md-6 mb-4">
+            <div class="card h-100 shadow-sm">
+              <div class="card-body">
+                <h5 class="card-title">
+                  {{ app.name }}
+                  {% if not app.is_active %}
+                    <span class="badge bg-secondary">Inactive</span>
+                  {% endif %}
+                </h5>
+
+                {% if app.description %}
+                  <p class="card-text text-muted">{{ app.description }}</p>
+                {% endif %}
+
+                <div class="mb-3">
+                  <small class="text-muted">
+                    <strong>Client ID:</strong> <code>{{ app.client_id }}</code>
+                  </small>
+                </div>
+
+                <div class="mb-3">
+                  <small class="text-muted">
+                    <i class="bi bi-person"></i> Created by {{ app.owner.email if app.owner else 'Unknown' }}
+                  </small>
+                  <br>
+                  <small class="text-muted">
+                    <i class="bi bi-calendar"></i> Created {{ app.created_at.strftime('%Y-%m-%d') }}
+                  </small>
+                  {% if app.last_used_at %}
+                    <br>
+                    <small class="text-muted">
+                      <i class="bi bi-clock"></i> Last used {{ app.last_used_at.strftime('%Y-%m-%d %H:%M') }}
+                    </small>
+                  {% endif %}
+                </div>
+
+                <div class="mb-3">
+                  <small class="text-muted">
+                    <i class="bi bi-people"></i> {{ app.total_users }} authorized user{{ 's' if app.total_users != 1 else '' }}
+                  </small>
+                  <br>
+                  <small class="text-muted">
+                    <i class="bi bi-activity"></i> {{ app.total_requests }} API request{{ 's' if app.total_requests != 1 else '' }}
+                  </small>
+                </div>
+
+                <a href="{{ url_for('developer_app_details', app_id=app.id) }}" class="btn btn-sm btn-outline-primary">
+                  <i class="bi bi-gear"></i> Manage
+                </a>
+              </div>
+            </div>
+          </div>
+        {% endfor %}
+      </div>
+    {% else %}
+      <div class="card">
+        <div class="card-body text-center py-5">
+          <i class="bi bi-code-square" style="font-size: 4rem; color: #ccc;"></i>
+          <h4 class="mt-3">No OAuth Applications</h4>
+          <p class="text-muted mb-4">
+            No OAuth applications have been created yet. Create one to integrate Quickbrush with third-party services.
+          </p>
+          <a href="{{ url_for('create_developer_app') }}" class="btn btn-primary">
+            <i class="bi bi-plus-circle"></i> Create First Application
+          </a>
+        </div>
+      </div>
+    {% endif %}
+
+    <!-- Documentation -->
+    <div class="card mt-4">
+      <div class="card-header">
+        <h5 class="mb-0"><i class="bi bi-book"></i> Integration Guide</h5>
+      </div>
+      <div class="card-body">
+        <h6>Quick Start</h6>
+        <ol>
+          <li>Create an OAuth application to get your client credentials</li>
+          <li>Configure your redirect URIs (e.g., for custom GPT: <code>https://chat.openai.com/aip/g-{gpt-id}/oauth/callback</code>)</li>
+          <li>Use the authorization endpoint: <code>{{ url_for('oauth_authorize', _external=True) }}</code></li>
+          <li>Exchange authorization codes for access tokens at: <code>{{ url_for('oauth_token', _external=True) }}</code></li>
+          <li>Use Bearer tokens to authenticate API requests</li>
+        </ol>
+
+        <h6 class="mt-3">Available Scopes</h6>
+        <ul>
+          <li><code>read:user</code> - Read user profile and account information</li>
+          <li><code>write:generate</code> - Generate images on behalf of the user</li>
+          <li><code>read:generations</code> - View user's image generation history</li>
+          <li><code>read:account</code> - View account balance and usage</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

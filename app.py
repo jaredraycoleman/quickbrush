@@ -11,8 +11,11 @@ from flask import (
     url_for,
     request,
     flash,
+    jsonify,
 )
 from dotenv import find_dotenv, load_dotenv
+import logging
+import sys
 
 from config import Config
 from auth import oauth, login_required, admin_required, invite_required
@@ -35,6 +38,16 @@ from flask import send_file
 from io import BytesIO
 import tempfile
 
+
+# ---------------------------------------------------------
+# Configure logging to stdout for Kubernetes
+# ---------------------------------------------------------
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s [%(levelname)s] %(name)s: %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------
 # Load environment variables
@@ -134,6 +147,11 @@ def home():
 
 @app.route("/login")
 def login():
+    # Store the next URL in session to redirect after authentication
+    next_url = request.args.get("next")
+    if next_url:
+        session["next_url"] = next_url
+
     return oauth.auth0.authorize_redirect( # type: ignore
         redirect_uri=url_for("callback", _external=True, _scheme="https" if Config.FLASK_ENV == "production" else "http")
     )
@@ -144,7 +162,18 @@ def callback():
         token = oauth.auth0.authorize_access_token() # type: ignore
         session["user"] = token
 
-        # Redirect to home (About page) after login
+        # Get the next URL from session (if any)
+        next_url = session.pop("next_url", None)
+
+        # Validate next_url to prevent open redirect vulnerability
+        if next_url:
+            from urllib.parse import urlparse
+            # Only allow relative URLs or same-host URLs
+            parsed = urlparse(next_url)
+            if not parsed.netloc or parsed.netloc == request.host:
+                return redirect(next_url)
+
+        # Default: redirect to home (About page) after login
         # Users with invites can navigate to dashboard from there
         return redirect(url_for("home"))
     except Exception as e:
@@ -1065,6 +1094,507 @@ def admin_delete_user():
         return {"success": True}
     else:
         return {"error": "Failed to delete user. Cannot delete admin accounts."}, 500
+
+
+# ---------------------------------------------------------
+# OAUTH PROVIDER ROUTES
+# ---------------------------------------------------------
+
+@app.route("/oauth/authorize", methods=["GET", "POST"])
+@login_required
+def oauth_authorize():
+    """OAuth authorization endpoint."""
+    from oauth_service import get_oauth_application_by_client_id, create_authorization_code, parse_scope_string, validate_scopes
+
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("login"))
+
+    # Get OAuth parameters
+    client_id = request.args.get("client_id")
+    redirect_uri = request.args.get("redirect_uri")
+    response_type = request.args.get("response_type", "code")
+    scope = request.args.get("scope", "read:user")
+    state = request.args.get("state", "")
+    code_challenge = request.args.get("code_challenge")
+    code_challenge_method = request.args.get("code_challenge_method", "S256")
+
+    # Validate required parameters
+    if not client_id or not redirect_uri:
+        return render_template(
+            "oauth_error.html",
+            error="invalid_request",
+            error_description="Missing required parameters (client_id, redirect_uri)"
+        ), 400
+
+    # Get application
+    app_obj = get_oauth_application_by_client_id(client_id)
+    if not app_obj:
+        return render_template(
+            "oauth_error.html",
+            error="invalid_client",
+            error_description="Unknown client_id"
+        ), 400
+
+    # Validate redirect URI
+    if not app_obj.is_redirect_uri_allowed(redirect_uri):
+        return render_template(
+            "oauth_error.html",
+            error="invalid_request",
+            error_description=f"Redirect URI not allowed: {redirect_uri}"
+        ), 400
+
+    # Validate response_type
+    if response_type != "code":
+        error_url = f"{redirect_uri}?error=unsupported_response_type&error_description=Only+code+is+supported&state={state}"
+        return redirect(error_url)
+
+    # Parse and validate scopes
+    requested_scopes = parse_scope_string(scope)
+    scopes_valid, invalid_scopes = validate_scopes(requested_scopes)
+    if not scopes_valid:
+        error_url = f"{redirect_uri}?error=invalid_scope&error_description=Invalid+scopes:+{'+'.join(invalid_scopes)}&state={state}"
+        return redirect(error_url)
+
+    # Check if user already approved this app with these scopes
+    from models import OAuthAuthorization
+    existing_auth = OAuthAuthorization.objects(user=user, application=app_obj, is_active=True).first()
+
+    # If POST request, user is approving/denying
+    if request.method == "POST":
+        action = request.form.get("action")
+
+        if action == "deny":
+            # User denied authorization
+            error_url = f"{redirect_uri}?error=access_denied&error_description=User+denied+authorization&state={state}"
+            return redirect(error_url)
+
+        elif action == "approve":
+            # Create authorization code
+            try:
+                auth_code = create_authorization_code(
+                    application=app_obj,
+                    user=user,
+                    redirect_uri=redirect_uri,
+                    scopes=requested_scopes,
+                    code_challenge=code_challenge,
+                    code_challenge_method=code_challenge_method,
+                )
+
+                # Redirect back to application with code
+                success_url = f"{redirect_uri}?code={auth_code.code}&state={state}"
+                return redirect(success_url)
+
+            except ValueError as e:
+                error_url = f"{redirect_uri}?error=invalid_request&error_description={str(e)}&state={state}"
+                return redirect(error_url)
+
+    # GET request - show consent page
+    from oauth_service import AVAILABLE_SCOPES
+    scope_descriptions = {scope: AVAILABLE_SCOPES.get(scope, scope) for scope in requested_scopes}
+
+    return render_template(
+        "oauth_consent.html",
+        application=app_obj,
+        scopes=scope_descriptions,
+        redirect_uri=redirect_uri,
+        state=state,
+        existing_auth=existing_auth
+    )
+
+
+@app.route("/oauth/token", methods=["POST"])
+def oauth_token():
+    """OAuth token endpoint."""
+    try:
+        logger.info("=== OAuth Token Request Started ===")
+        logger.info(f"Content-Type: {request.content_type}")
+        logger.info(f"Method: {request.method}")
+        logger.info(f"Headers: {dict(request.headers)}")
+
+        from oauth_service import exchange_authorization_code, refresh_access_token, verify_oauth_application
+
+        # Get JSON data once (if present) using silent=True to avoid exceptions
+        json_data = request.get_json(silent=True)
+
+        # Log request data for debugging
+        logger.info(f"Form data: {dict(request.form)}")
+        logger.info(f"JSON data: {json_data}")
+
+        # Get token request parameters (can be in body or as form data)
+        grant_type = request.form.get("grant_type") or (json_data.get("grant_type") if json_data else None)
+
+        logger.info(f"Grant type: {grant_type}")
+
+        if not grant_type:
+            return jsonify({
+                "error": "invalid_request",
+                "error_description": "Missing grant_type"
+            }), 400
+
+        # Authorization code grant
+        if grant_type == "authorization_code":
+            code = request.form.get("code") or (json_data.get("code") if json_data else None)
+            client_id = request.form.get("client_id") or (json_data.get("client_id") if json_data else None)
+            client_secret = request.form.get("client_secret") or (json_data.get("client_secret") if json_data else None)
+            redirect_uri = request.form.get("redirect_uri") or (json_data.get("redirect_uri") if json_data else None)
+            code_verifier = request.form.get("code_verifier") or (json_data.get("code_verifier") if json_data else None)
+
+            logger.info(f"Authorization code exchange request:")
+            logger.info(f"  - code: {code[:20]}..." if code else "  - code: None")
+            logger.info(f"  - client_id: {client_id}")
+            logger.info(f"  - redirect_uri: {redirect_uri}")
+            logger.info(f"  - has_client_secret: {bool(client_secret)}")
+            logger.info(f"  - has_code_verifier: {bool(code_verifier)}")
+
+            if not all([code, client_id, client_secret, redirect_uri]):
+                logger.warning("Missing required parameters for authorization code exchange")
+                return jsonify({
+                    "error": "invalid_request",
+                    "error_description": "Missing required parameters"
+                }), 400
+
+            # Exchange code for token
+            logger.info("Calling exchange_authorization_code...")
+            token_data = exchange_authorization_code(
+                code=code,
+                client_id=client_id,
+                client_secret=client_secret,
+                redirect_uri=redirect_uri,
+                code_verifier=code_verifier,
+            )
+
+            if not token_data:
+                logger.error("Token exchange failed - invalid or expired authorization code")
+                return jsonify({
+                    "error": "invalid_grant",
+                    "error_description": "Invalid or expired authorization code"
+                }), 400
+
+            logger.info("Token exchange successful!")
+            logger.info(f"Returning token data: {list(token_data.keys())}")
+            return jsonify(token_data), 200
+
+        # Refresh token grant
+        elif grant_type == "refresh_token":
+            refresh_token = request.form.get("refresh_token") or (json_data.get("refresh_token") if json_data else None)
+
+            if not refresh_token:
+                return jsonify({
+                    "error": "invalid_request",
+                    "error_description": "Missing refresh_token"
+                }), 400
+
+            token_data = refresh_access_token(refresh_token)
+
+            if not token_data:
+                return jsonify({
+                    "error": "invalid_grant",
+                    "error_description": "Invalid or expired refresh token"
+                }), 400
+
+            return jsonify(token_data), 200
+
+        else:
+            return jsonify({
+                "error": "unsupported_grant_type",
+                "error_description": f"Grant type '{grant_type}' is not supported"
+            }), 400
+
+    except Exception as e:
+        # Log the error with full traceback
+        import traceback
+        logger.error("=== OAuth Token Endpoint Error ===")
+        logger.error(f"Error: {e}")
+        logger.error(f"Traceback:\n{traceback.format_exc()}")
+
+        # Return JSON error response
+        return jsonify({
+            "error": "server_error",
+            "error_description": f"Internal server error: {str(e)}"
+        }), 500
+
+
+@app.route("/oauth/revoke", methods=["POST"])
+@login_required
+def oauth_revoke():
+    """Revoke an OAuth token."""
+    from oauth_service import revoke_token
+
+    json_data = request.get_json(silent=True)
+    token = request.form.get("token") or (json_data.get("token") if json_data else None)
+
+    if not token:
+        return jsonify({"error": "invalid_request"}), 400
+
+    revoke_token(token)
+
+    # Always return success per OAuth 2.0 spec (don't leak token validity)
+    return jsonify({"success": True}), 200
+
+
+@app.route("/developer/apps")
+@login_required
+@admin_required
+def developer_apps():
+    """Developer dashboard for managing OAuth applications (admin only)."""
+    from models import OAuthApplication
+
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Get all OAuth applications (admin view - not user-specific)
+    apps = list(OAuthApplication.objects())
+
+    return render_template(
+        "developer_apps.html",
+        user=user,
+        apps=apps
+    )
+
+
+@app.route("/developer/apps/create", methods=["GET", "POST"])
+@login_required
+@admin_required
+def create_developer_app():
+    """Create a new OAuth application."""
+    from oauth_service import create_oauth_application
+
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        description = request.form.get("description", "").strip()
+        homepage_url = request.form.get("homepage_url", "").strip()
+        redirect_uris_raw = request.form.get("redirect_uris", "").strip()
+
+        # Validate inputs
+        if not name:
+            flash("Application name is required", "danger")
+            return render_template("create_oauth_app.html", user=user, form_data=request.form)
+
+        if not redirect_uris_raw:
+            flash("At least one redirect URI is required", "danger")
+            return render_template("create_oauth_app.html", user=user, form_data=request.form)
+
+        # Parse redirect URIs (one per line)
+        redirect_uris = [uri.strip() for uri in redirect_uris_raw.split("\n") if uri.strip()]
+
+        if not redirect_uris:
+            flash("At least one redirect URI is required", "danger")
+            return render_template("create_oauth_app.html", user=user, form_data=request.form)
+
+        # Create application
+        try:
+            app_obj, client_secret = create_oauth_application(
+                owner=user,
+                name=name,
+                redirect_uris=redirect_uris,
+                description=description,
+                homepage_url=homepage_url,
+            )
+
+            # Store client secret in session to show once
+            session["new_oauth_app_secret"] = client_secret
+            session["new_oauth_app_id"] = str(app_obj.id)
+
+            flash(f"OAuth application '{name}' created successfully!", "success")
+            return redirect(url_for("developer_app_details", app_id=str(app_obj.id)))
+
+        except Exception as e:
+            flash(f"Error creating application: {str(e)}", "danger")
+            return render_template("create_oauth_app.html", user=user, form_data=request.form)
+
+    # GET request
+    return render_template("create_oauth_app.html", user=user)
+
+
+@app.route("/developer/apps/<app_id>")
+@login_required
+@admin_required
+def developer_app_details(app_id: str):
+    """View OAuth application details (admin only)."""
+    from models import OAuthApplication, OAuthAuthorization
+
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Get application (admin can view any app)
+    app_obj = OAuthApplication.objects(id=app_id).first()
+    if not app_obj:
+        flash("Application not found", "danger")
+        return redirect(url_for("developer_apps"))
+
+    # Get authorization count
+    auth_count = OAuthAuthorization.objects(application=app_obj, is_active=True).count()
+
+    # Check for newly created app secret
+    new_secret = None
+    if session.get("new_oauth_app_id") == app_id:
+        new_secret = session.pop("new_oauth_app_secret", None)
+        session.pop("new_oauth_app_id", None)
+
+    return render_template(
+        "oauth_app_details.html",
+        user=user,
+        app=app_obj,
+        auth_count=auth_count,
+        new_secret=new_secret
+    )
+
+
+@app.route("/developer/apps/<app_id>/delete", methods=["POST"])
+@login_required
+@admin_required
+def delete_developer_app(app_id: str):
+    """Delete an OAuth application (admin only)."""
+    from oauth_service import delete_oauth_application
+    from models import OAuthApplication
+
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Get application (admin can delete any app)
+    app_obj = OAuthApplication.objects(id=app_id).first()
+    if not app_obj:
+        flash("Application not found", "danger")
+        return redirect(url_for("developer_apps"))
+
+    # Verify confirmation
+    confirmation = request.form.get("confirmation")
+    if confirmation != app_obj.name:
+        flash(f"Please type '{app_obj.name}' to confirm deletion", "danger")
+        return redirect(url_for("developer_app_details", app_id=app_id))
+
+    # Delete application
+    try:
+        app_name = app_obj.name
+        delete_oauth_application(app_obj)
+        flash(f"Application '{app_name}' deleted successfully", "success")
+        return redirect(url_for("developer_apps"))
+    except Exception as e:
+        flash(f"Error deleting application: {str(e)}", "danger")
+        return redirect(url_for("developer_app_details", app_id=app_id))
+
+
+@app.route("/developer/apps/<app_id>/edit", methods=["GET", "POST"])
+@login_required
+@admin_required
+def edit_developer_app(app_id: str):
+    """Edit an OAuth application (admin only)."""
+    from oauth_service import update_oauth_application
+    from models import OAuthApplication
+
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Get application
+    app_obj = OAuthApplication.objects(id=app_id).first()
+    if not app_obj:
+        flash("Application not found", "danger")
+        return redirect(url_for("developer_apps"))
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        description = request.form.get("description", "").strip()
+        homepage_url = request.form.get("homepage_url", "").strip()
+        redirect_uris_raw = request.form.get("redirect_uris", "").strip()
+
+        # Validate inputs
+        if not name:
+            flash("Application name is required", "danger")
+            return render_template("edit_oauth_app.html", user=user, app=app_obj, form_data=request.form)
+
+        if not redirect_uris_raw:
+            flash("At least one redirect URI is required", "danger")
+            return render_template("edit_oauth_app.html", user=user, app=app_obj, form_data=request.form)
+
+        # Parse redirect URIs (one per line)
+        redirect_uris = [uri.strip() for uri in redirect_uris_raw.split("\n") if uri.strip()]
+
+        if not redirect_uris:
+            flash("At least one redirect URI is required", "danger")
+            return render_template("edit_oauth_app.html", user=user, app=app_obj, form_data=request.form)
+
+        # Update application
+        try:
+            update_oauth_application(
+                app=app_obj,
+                name=name,
+                description=description,
+                homepage_url=homepage_url,
+                redirect_uris=redirect_uris,
+            )
+
+            flash(f"OAuth application '{name}' updated successfully!", "success")
+            return redirect(url_for("developer_app_details", app_id=app_id))
+
+        except Exception as e:
+            flash(f"Error updating application: {str(e)}", "danger")
+            return render_template("edit_oauth_app.html", user=user, app=app_obj, form_data=request.form)
+
+    # GET request - show edit form
+    return render_template("edit_oauth_app.html", user=user, app=app_obj)
+
+
+@app.route("/settings/authorized-apps")
+@login_required
+def authorized_apps():
+    """View and manage authorized OAuth applications."""
+    from oauth_service import get_user_authorizations
+
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    authorizations = get_user_authorizations(user)
+
+    return render_template(
+        "authorized_apps.html",
+        user=user,
+        authorizations=authorizations
+    )
+
+
+@app.route("/settings/authorized-apps/<auth_id>/revoke", methods=["POST"])
+@login_required
+def revoke_app_authorization(auth_id: str):
+    """Revoke authorization for an OAuth application."""
+    from models import OAuthAuthorization
+
+    user = get_current_user()
+    if not user:
+        flash("Error loading user data", "danger")
+        return redirect(url_for("dashboard"))
+
+    # Get authorization
+    auth = OAuthAuthorization.objects(id=auth_id, user=user).first()
+    if not auth:
+        flash("Authorization not found", "danger")
+        return redirect(url_for("authorized_apps"))
+
+    # Revoke authorization
+    try:
+        app_name = auth.application.name if auth.application else "Unknown"
+        auth.revoke()
+        flash(f"Access revoked for '{app_name}'", "success")
+    except Exception as e:
+        flash(f"Error revoking access: {str(e)}", "danger")
+
+    return redirect(url_for("authorized_apps"))
 
 
 # ---------------------------------------------------------

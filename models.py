@@ -610,6 +610,308 @@ class AppSettings(Document):
             settings = AppSettings(invite_codes_enabled=True)
             settings.save()
         return settings
+# OAUTH MODELS
+# ========================================
+
+class OAuthApplication(Document):
+    """
+    OAuth 2.0 application registered by developers.
+
+    Allows third-party applications (like custom GPTs) to authenticate
+    users and access the Quickbrush API on their behalf.
+    """
+    # Application identity
+    client_id = StringField(required=True, unique=True)  # Public identifier
+    client_secret_hash = StringField(required=True)  # Hashed client secret
+
+    # Application details
+    name = StringField(required=True)  # Application name
+    description = StringField()  # What this app does
+    homepage_url = StringField()  # App's homepage
+
+    # OAuth configuration
+    redirect_uris = ListField(StringField(), required=True)  # Allowed redirect URIs
+    allowed_scopes = ListField(StringField(), default=lambda: ["read:user", "write:generate"])  # Scopes this app can request
+
+    # Owner
+    owner = ReferenceField(User, required=True)  # Developer who owns this app
+
+    # Settings
+    is_active = BooleanField(default=True)
+    is_public = BooleanField(default=False)  # Whether app appears in public directory
+    require_pkce = BooleanField(default=True)  # Require PKCE for authorization code flow
+
+    # Usage tracking
+    total_users = IntField(default=0)  # Number of users who have authorized this app
+    total_requests = IntField(default=0)  # Total API requests made
+    last_used_at = DateTimeField()
+
+    # Timestamps
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+
+    meta = {
+        'collection': 'oauth_applications',
+        'indexes': [
+            'client_id',
+            'owner',
+            'is_active',
+            'created_at',
+        ]
+    }
+
+    def __str__(self):
+        return f"OAuthApplication({self.name}, {self.client_id})"
+
+    @staticmethod
+    def generate_client_credentials() -> tuple[str, str]:
+        """
+        Generate client_id and client_secret.
+
+        Returns:
+            (client_id, client_secret)
+        """
+        client_id = f"qb_app_{secrets.token_urlsafe(16)}"
+        client_secret = secrets.token_urlsafe(32)
+        return client_id, client_secret
+
+    @staticmethod
+    def hash_secret(secret: str) -> str:
+        """Hash a client secret for secure storage."""
+        import hashlib
+        return hashlib.sha256(secret.encode()).hexdigest()
+
+    def verify_secret(self, secret: str) -> bool:
+        """Verify a client secret against this application."""
+        return self.client_secret_hash == self.hash_secret(secret)
+
+    def is_redirect_uri_allowed(self, redirect_uri: str) -> bool:
+        """Check if a redirect URI is allowed for this application."""
+        return redirect_uri in self.redirect_uris
+
+
+class OAuthAuthorizationCode(Document):
+    """
+    Temporary authorization code issued during OAuth flow.
+
+    These are short-lived codes exchanged for access tokens.
+    Auto-deleted after 10 minutes using TTL index.
+    """
+    code = StringField(required=True, unique=True)  # The authorization code
+
+    # OAuth flow details
+    application = ReferenceField(OAuthApplication, required=True)
+    user = ReferenceField(User, required=True)
+    redirect_uri = StringField(required=True)  # Must match token exchange request
+    scopes = ListField(StringField(), required=True)  # Approved scopes
+
+    # PKCE support (Proof Key for Code Exchange)
+    code_challenge = StringField()  # SHA-256 hash of code_verifier
+    code_challenge_method = StringField(default="S256", choices=["S256", "plain"])
+
+    # Usage tracking
+    is_used = BooleanField(default=False)  # Codes can only be used once
+    used_at = DateTimeField()
+
+    # Timestamps
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    expires_at = DateTimeField(required=True)  # Typically 10 minutes from creation
+
+    meta = {
+        'collection': 'oauth_authorization_codes',
+        'indexes': [
+            'code',
+            'application',
+            'user',
+            {
+                'fields': ['created_at'],
+                'name': 'created_at_ttl_idx',
+                'expireAfterSeconds': 600  # Auto-delete after 10 minutes
+            }
+        ]
+    }
+
+    def __str__(self):
+        return f"OAuthAuthorizationCode({self.code[:8]}..., {self.user.email if self.user else 'unknown'})"
+
+    @staticmethod
+    def generate_code() -> str:
+        """Generate a secure authorization code."""
+        return secrets.token_urlsafe(32)
+
+    def is_expired(self) -> bool:
+        """Check if this authorization code has expired."""
+        # MongoDB stores datetimes in UTC but returns them as timezone-naive
+        # Make expires_at timezone-aware if it isn't already
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) > expires_at
+
+    def verify_pkce(self, code_verifier: str) -> bool:
+        """
+        Verify PKCE code_verifier against stored code_challenge.
+
+        Args:
+            code_verifier: The plain text verifier from token request
+
+        Returns:
+            True if verification succeeds
+        """
+        if not self.code_challenge:
+            # PKCE not used for this code
+            return True
+
+        if self.code_challenge_method == "S256":
+            import hashlib
+            import base64
+            # Compute SHA-256 hash of verifier
+            challenge = base64.urlsafe_b64encode(
+                hashlib.sha256(code_verifier.encode()).digest()
+            ).decode().rstrip('=')
+            return challenge == self.code_challenge
+        elif self.code_challenge_method == "plain":
+            return code_verifier == self.code_challenge
+
+        return False
+
+
+class OAuthToken(Document):
+    """
+    OAuth access token for API authentication.
+
+    Tokens allow third-party applications to access the API on behalf of users.
+    """
+    # Token details
+    access_token = StringField(required=True, unique=True)  # The bearer token
+    token_type = StringField(default="Bearer")
+    refresh_token = StringField(unique=True, sparse=True)  # For refreshing access tokens
+
+    # OAuth context
+    application = ReferenceField(OAuthApplication, required=True)
+    user = ReferenceField(User, required=True)
+    scopes = ListField(StringField(), required=True)  # What this token can do
+
+    # Token lifecycle
+    is_active = BooleanField(default=True)
+    is_revoked = BooleanField(default=False)
+
+    # Usage tracking
+    last_used_at = DateTimeField()
+    total_requests = IntField(default=0)
+
+    # Timestamps
+    created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    expires_at = DateTimeField(required=True)  # Access tokens typically expire in 1 hour
+    refresh_token_expires_at = DateTimeField()  # Refresh tokens typically expire in 30 days
+
+    meta = {
+        'collection': 'oauth_tokens',
+        'indexes': [
+            'access_token',
+            'refresh_token',
+            'application',
+            'user',
+            'is_active',
+            'expires_at',
+        ]
+    }
+
+    def __str__(self):
+        return f"OAuthToken({self.access_token[:8]}..., {self.user.email if self.user else 'unknown'})"
+
+    @staticmethod
+    def generate_tokens() -> tuple[str, str]:
+        """
+        Generate access_token and refresh_token.
+
+        Returns:
+            (access_token, refresh_token)
+        """
+        access_token = f"qb_at_{secrets.token_urlsafe(32)}"
+        refresh_token = f"qb_rt_{secrets.token_urlsafe(32)}"
+        return access_token, refresh_token
+
+    def is_expired(self) -> bool:
+        """Check if this access token has expired."""
+        # MongoDB stores datetimes in UTC but returns them as timezone-naive
+        # Make expires_at timezone-aware if it isn't already
+        expires_at = self.expires_at
+        if expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        return datetime.now(timezone.utc) > expires_at
+
+    def is_valid(self) -> bool:
+        """Check if this token is valid for use."""
+        return (
+            self.is_active
+            and not self.is_revoked
+            and not self.is_expired()
+        )
+
+    def has_scope(self, required_scope: str) -> bool:
+        """Check if this token has a required scope."""
+        return required_scope in self.scopes
+
+    def record_usage(self):
+        """Record that this token was used."""
+        self.last_used_at = datetime.now(timezone.utc)
+        self.total_requests += 1
+
+    def revoke(self):
+        """Revoke this token."""
+        self.is_revoked = True
+        self.is_active = False
+        self.updated_at = datetime.now(timezone.utc)
+
+
+class OAuthAuthorization(Document):
+    """
+    Record of user authorization for an OAuth application.
+
+    Tracks which users have authorized which apps and with what scopes.
+    Allows users to view and revoke app access.
+    """
+    user = ReferenceField(User, required=True)
+    application = ReferenceField(OAuthApplication, required=True)
+    scopes = ListField(StringField(), required=True)
+
+    # Status
+    is_active = BooleanField(default=True)
+
+    # Timestamps
+    first_authorized_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
+    last_used_at = DateTimeField()
+    revoked_at = DateTimeField()
+
+    meta = {
+        'collection': 'oauth_authorizations',
+        'indexes': [
+            ('user', 'application'),  # Compound unique index
+            'user',
+            'application',
+            'is_active',
+        ]
+    }
+
+    def __str__(self):
+        return f"OAuthAuthorization({self.user.email if self.user else 'unknown'}, {self.application.name if self.application else 'unknown'})"
+
+    def revoke(self):
+        """Revoke this authorization and all associated tokens."""
+        self.is_active = False
+        self.revoked_at = datetime.now(timezone.utc)
+        self.save()
+
+        # Revoke all active tokens for this user/app combination
+        tokens = OAuthToken.objects(
+            user=self.user,
+            application=self.application,
+            is_active=True
+        )
+        for token in tokens:
+            token.revoke()
+            token.save()
 
 
 # ========================================
