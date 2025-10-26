@@ -9,7 +9,7 @@ metadata:
   namespace: quickbrush
   name: quickbrush-service
 spec:
-  replicas: 1
+  replicas: 2
   selector:
     matchLabels:
       app.kubernetes.io/name: quickbrush-service
@@ -34,7 +34,7 @@ spec:
             - name: FLASK_ENV
               value: "production"
             - name: DEPLOY_ID # for easy re-deployment
-              value: DEPLOYID-488a98af854749a1f0a83bc996764431
+              value: DEPLOYID-3b3c008cd89fb6c48b1934427c51f93f
 
             # Flask secret key
             - name: APP_SECRET_KEY

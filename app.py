@@ -200,6 +200,12 @@ def support():
     return render_template("support.html")
 
 
+@app.route("/ai-and-artists")
+def ai_and_artists():
+    """AI & Artists commitment page."""
+    return render_template("ai_and_artists.html", title="AI & Artists - Quickbrush")
+
+
 @app.route("/logout")
 def logout():
     session.clear()
@@ -216,7 +222,6 @@ def logout():
     )
 
 @app.route("/dashboard")
-@login_required
 @login_required
 def dashboard():
     user = get_current_user()
@@ -556,7 +561,6 @@ class GenerateRequest(BaseModel):
 
 @app.route("/generate", methods=["GET", "POST"])
 @login_required
-@login_required
 def generate():
     if request.method == "POST":
         user = get_current_user()
@@ -709,7 +713,6 @@ def serve_image(generation_id: str):
 
 
 @app.route("/library")
-@login_required
 @login_required
 def library():
     """View user's generation library."""

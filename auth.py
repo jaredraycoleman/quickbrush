@@ -53,7 +53,7 @@ def admin_required(f):
 
         if not user.is_admin:
             flash("You need admin privileges to access this page.", "danger")
-            return redirect(url_for("index"))
+            return redirect(url_for("home"))
 
         return f(*args, **kwargs)
     return decorated

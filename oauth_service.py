@@ -5,6 +5,7 @@ This module implements the OAuth 2.0 authorization server functionality,
 allowing third-party applications to authenticate users and access the API.
 """
 
+import logging
 from datetime import datetime, timedelta, timezone
 from typing import Optional
 from models import (
@@ -14,6 +15,8 @@ from models import (
     OAuthToken,
     OAuthAuthorization,
 )
+
+logger = logging.getLogger(__name__)
 
 
 # ========================================
@@ -69,7 +72,7 @@ def get_oauth_application_by_client_id(client_id: str) -> Optional[OAuthApplicat
     try:
         return OAuthApplication.objects(client_id=client_id, is_active=True).first()  # type: ignore
     except Exception as e:
-        print(f"Error fetching OAuth application: {e}")
+        logger.error(f"Error fetching OAuth application: {e}")
         return None
 
 
@@ -182,7 +185,7 @@ def get_authorization_code(code: str) -> Optional[OAuthAuthorizationCode]:
     try:
         return OAuthAuthorizationCode.objects(code=code, is_used=False).first()  # type: ignore
     except Exception as e:
-        print(f"Error fetching authorization code: {e}")
+        logger.error(f"Error fetching authorization code: {e}")
         return None
 
 
@@ -309,7 +312,7 @@ def get_token_by_access_token(access_token: str) -> Optional[OAuthToken]:
     try:
         return OAuthToken.objects(access_token=access_token).first()  # type: ignore
     except Exception as e:
-        print(f"Error fetching OAuth token: {e}")
+        logger.error(f"Error fetching OAuth token: {e}")
         return None
 
 
@@ -318,7 +321,7 @@ def get_token_by_refresh_token(refresh_token: str) -> Optional[OAuthToken]:
     try:
         return OAuthToken.objects(refresh_token=refresh_token).first()  # type: ignore
     except Exception as e:
-        print(f"Error fetching OAuth token: {e}")
+        logger.error(f"Error fetching OAuth token: {e}")
         return None
 
 

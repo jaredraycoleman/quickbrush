@@ -4,7 +4,10 @@ Image generation service for Quickbrush.
 Shared service for both web and API image generation to eliminate code duplication.
 """
 
+import logging
 from models import User, ImageQuality, QUALITY_COSTS, AspectRatio, ASPECT_RATIO_SIZES, ImageGenerationType
+
+logger = logging.getLogger(__name__)
 from maker import (
     CharacterImageGenerator,
     ImageGenerator,
@@ -101,7 +104,7 @@ def generate_image(
     if reference_image_paths is None:
         reference_image_paths = []
 
-    print(f"Reference image paths: {reference_image_paths}")
+    logger.debug(f"Reference image paths: {reference_image_paths}")
 
     # Determine aspect ratio and size
     if aspect_ratio is None:

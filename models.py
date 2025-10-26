@@ -8,6 +8,7 @@ This module defines the data schemas for:
 - Brushstroke Transactions (purchases, usage)
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 from enum import Enum
@@ -26,6 +27,8 @@ from mongoengine import (
     NULLIFY,
 )
 import secrets
+
+logger = logging.getLogger(__name__)
 
 
 # ========================================
@@ -133,7 +136,6 @@ class User(Document):
     is_admin = BooleanField(default=False)  # Admin users have access to admin panel
 
     # Metadata
-    is_active = BooleanField(default=True)
     created_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
     updated_at = DateTimeField(default=lambda: datetime.now(timezone.utc))
     last_login = DateTimeField()
@@ -849,7 +851,7 @@ def get_user_by_auth0_sub(auth0_sub: str) -> Optional[User]:
     try:
         return User.objects(auth0_sub=auth0_sub).first() # type: ignore
     except Exception as e:
-        print(f"Error fetching user by auth0_sub: {e}")
+        logger.error(f"Error fetching user by auth0_sub: {e}")
         return None
 
 
@@ -902,5 +904,5 @@ def verify_api_key(key_id: str, secret: str) -> Optional[APIKey]:
 
         return api_key
     except Exception as e:
-        print(f"Error verifying API key: {e}")
+        logger.error(f"Error verifying API key: {e}")
         return None

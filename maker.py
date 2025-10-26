@@ -147,8 +147,6 @@ class ImageGenerator(ABC):
             return description
         except Exception:
             raise ValueError("Failed to parse response into Description model.")
-        if not response.choices[0].message.content:
-            raise ValueError("No content in the response message.")
     
     def generate_image(self,
                        description: str,

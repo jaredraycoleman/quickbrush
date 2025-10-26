@@ -6,9 +6,12 @@ This module provides functionality for:
 - Gifting purchased tokens
 """
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional, List, Dict, Any
 from models import User, BrushstrokeTransaction, TransactionType
+
+logger = logging.getLogger(__name__)
 
 
 # ========================================
@@ -69,7 +72,7 @@ def get_user_details(user_id: str) -> Optional[Dict[str, Any]]:
             'recent_transactions': list(recent_transactions),
         }
     except Exception as e:
-        print(f"Error getting user details: {e}")
+        logger.error(f"Error getting user details: {e}")
         return None
 
 
@@ -111,7 +114,7 @@ def gift_tokens(admin_user: User, target_user_id: str, amount: int, description:
 
         return True
     except Exception as e:
-        print(f"Error gifting tokens: {e}")
+        logger.error(f"Error gifting tokens: {e}")
         return False
 
 
@@ -135,7 +138,7 @@ def toggle_admin_status(target_user_id: str) -> Optional[bool]:
 
         return user.is_admin
     except Exception as e:
-        print(f"Error toggling admin status: {e}")
+        logger.error(f"Error toggling admin status: {e}")
         return None
 
 
@@ -180,7 +183,7 @@ def remove_tokens(admin_user: User, target_user_id: str, amount: int, descriptio
 
         return True
     except Exception as e:
-        print(f"Error removing tokens: {e}")
+        logger.error(f"Error removing tokens: {e}")
         return False
 
 
@@ -204,18 +207,18 @@ def delete_user_account(admin_user: User, target_user_id: str) -> bool:
 
         # Prevent deleting admin accounts
         if user.is_admin:
-            print(f"Cannot delete admin account: {user.email}")
+            logger.warning(f"Cannot delete admin account: {user.email}")
             return False
 
         # Use the existing account service to delete
         success = delete_account_service(user)
 
         if success:
-            print(f"Admin {admin_user.email} deleted user account: {user.email}")
+            logger.info(f"Admin {admin_user.email} deleted user account: {user.email}")
 
         return success
     except Exception as e:
-        print(f"Error deleting user account: {e}")
+        logger.error(f"Error deleting user account: {e}")
         return False
 
 
@@ -235,7 +238,7 @@ def get_user_stats() -> Dict[str, Any]:
             'admin_users': admin_users,
         }
     except Exception as e:
-        print(f"Error getting user stats: {e}")
+        logger.error(f"Error getting user stats: {e}")
         return {
             'total_users': 0,
             'admin_users': 0,
@@ -262,7 +265,7 @@ def get_app_settings() -> Dict[str, Any]:
             'updated_by': settings.updated_by.email if settings.updated_by else None,
         }
     except Exception as e:
-        print(f"Error getting app settings: {e}")
+        logger.error(f"Error getting app settings: {e}")
         return {
             'updated_at': None,
             'updated_by': None,
