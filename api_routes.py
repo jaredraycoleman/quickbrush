@@ -274,6 +274,10 @@ async def generate_image(
                 detail=f"Error processing reference images: {str(e)}"
             )
 
+    print(
+        {path: path.exists() for path in reference_paths}
+    )
+
     try:
         # Use shared generation service
         result = generate_image_shared(

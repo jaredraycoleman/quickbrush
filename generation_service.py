@@ -179,7 +179,7 @@ def generate_image(
                 error_message=f"Failed to generate image description: {str(e)}",
                 brushstrokes_remaining=current_balance
             )
-
+        
         # Step 2: Generate image (returns WebP bytes)
         try:
             image_data = generator.generate_image(
