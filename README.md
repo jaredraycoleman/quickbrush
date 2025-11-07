@@ -12,7 +12,7 @@ quickbrush/
 │   └── quickbrush-core/          # Shared image generation logic
 ├── foundry-module/               # Foundry VTT module
 ├── quickbrush-obsidian-plugin/   # Obsidian plugin
-├── website/                      # Static website (quickbrush.ai)
+├── docs/                         # Static website (quickbrush.ai)
 └── scripts/                      # Build and sync scripts
 ```
 
@@ -38,7 +38,7 @@ Or build individually:
 
 ```bash
 npm run build:foundry    # Sync core to Foundry module
-npm run build:website    # Sync core to website
+npm run build:docs       # Sync core to docs (website)
 npm run build:obsidian   # Build Obsidian plugin
 ```
 
@@ -82,11 +82,11 @@ Obsidian plugin for generating and managing RPG artwork in your vault.
 - TypeScript with esbuild bundling
 - Core library is bundled into the plugin build
 
-### Website (`website/`)
+### Website (`docs/`)
 
 Static website for quickbrush.ai with demo/generation interface.
 
-- Uses bundled core library (`website/js/quickbrush-core.js`)
+- Uses bundled core library (`docs/js/quickbrush-core.js`)
 - Pure HTML/CSS/JavaScript (no build step)
 
 ## Development Workflow
@@ -96,7 +96,7 @@ Static website for quickbrush.ai with demo/generation interface.
 1. Edit `packages/quickbrush-core/src/index.js`
 2. Run `npm run sync-core` to distribute changes
 3. Test in each platform:
-   - **Website:** Open `website/generate.html` in browser
+   - **Website:** Open `docs/generate.html` in browser
    - **Foundry:** Test in Foundry VTT instance
    - **Obsidian:** Build and test plugin
 
@@ -120,7 +120,7 @@ git add packages/quickbrush-core/src/index.js
 
 # The synced files are also committed for deployment
 git add foundry-module/scripts/quickbrush-core.js
-git add website/js/quickbrush-core.js
+git add docs/js/quickbrush-core.js
 ```
 
 ### Creating Releases
@@ -149,7 +149,7 @@ See [scripts/README.md](scripts/README.md) for detailed documentation.
 | `npm run sync-core` | Copy core library to all consuming projects |
 | `npm run build:all` | Build all projects |
 | `npm run build:foundry` | Sync core to Foundry module |
-| `npm run build:website` | Sync core to website |
+| `npm run build:docs` | Sync core to docs (website) |
 | `npm run build:obsidian` | Build Obsidian plugin |
 | `npm run release` | Automated release script for packaging and releasing |
 

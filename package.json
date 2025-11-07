@@ -12,7 +12,7 @@
     "sync-core": "bash scripts/sync-core.sh",
     "build:foundry": "npm run sync-core && echo 'Foundry module ready (uses bundled core)'",
     "build:obsidian": "cd quickbrush-obsidian-plugin && npm run build",
-    "build:website": "npm run sync-core && echo 'Website ready (uses bundled core)'",
+    "build:docs": "npm run sync-core && echo 'Docs (website) ready (uses bundled core)'",
     "build:all": "npm run sync-core && npm run build:obsidian",
     "release": "bash scripts/release.sh"
   },

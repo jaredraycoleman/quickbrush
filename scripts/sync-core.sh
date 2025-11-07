@@ -13,9 +13,9 @@ echo "Syncing quickbrush-core to all projects..."
 echo "  → foundry-module/scripts/quickbrush-core.js"
 cp "$CORE_SOURCE" "$PROJECT_ROOT/foundry-module/scripts/quickbrush-core.js"
 
-# Sync to website
-echo "  → website/js/quickbrush-core.js"
-cp "$CORE_SOURCE" "$PROJECT_ROOT/website/js/quickbrush-core.js"
+# Sync to docs (website)
+echo "  → docs/js/quickbrush-core.js"
+cp "$CORE_SOURCE" "$PROJECT_ROOT/docs/js/quickbrush-core.js"
 
 # Note: Obsidian plugin currently uses the API service, not the core library
 # When it switches to BYOK, add:

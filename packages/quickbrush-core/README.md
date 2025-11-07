@@ -118,7 +118,7 @@ npm run sync-core
 
 This copies the core library to:
 - `foundry-module/scripts/quickbrush-core.js`
-- `website/js/quickbrush-core.js`
+- `docs/js/quickbrush-core.js`
 
 ### File Structure
 
