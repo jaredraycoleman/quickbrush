@@ -15,7 +15,6 @@
     }
   ],
   "esmodules": [
-    "scripts/quickbrush-core.js",
     "scripts/quickbrush.js"
   ],
   "styles": [

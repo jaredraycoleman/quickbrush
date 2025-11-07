@@ -6,6 +6,48 @@
 const MODULE_ID = 'quickbrush';
 
 /**
+ * Load QuickbrushCore library dynamically
+ */
+let QuickbrushCore = null;
+
+async function loadQuickbrushCore() {
+  if (QuickbrushCore) {
+    return QuickbrushCore; // Already loaded
+  }
+
+  const coreUrl = game.settings.get(MODULE_ID, 'coreLibraryUrl');
+  
+  // Convert relative path to absolute URL for the fallback
+  const fallbackRelativePath = 'modules/quickbrush/scripts/quickbrush-core.js';
+  const fallbackUrl = new URL(fallbackRelativePath, window.location.origin).href;
+
+  console.log(`Quickbrush | Loading core library from: ${coreUrl}`);
+
+  try {
+    // Try loading from the configured URL
+    const module = await import(coreUrl);
+    QuickbrushCore = module.QuickbrushCore || module;
+    console.log('Quickbrush | Core library loaded successfully from:', coreUrl);
+    return QuickbrushCore;
+  } catch (error) {
+    console.warn(`Quickbrush | Failed to load core library from ${coreUrl}, trying fallback...`, error);
+
+    try {
+      // Fallback to bundled version (using absolute URL)
+      console.log(`Quickbrush | Attempting fallback URL: ${fallbackUrl}`);
+      const module = await import(fallbackUrl);
+      QuickbrushCore = module.QuickbrushCore || module;
+      console.log('Quickbrush | Core library loaded from fallback:', fallbackUrl);
+      return QuickbrushCore;
+    } catch (fallbackError) {
+      console.error('Quickbrush | Failed to load core library from both remote and fallback URLs', fallbackError);
+      ui.notifications.error('Quickbrush: Failed to load core library. Please check your settings or module installation.');
+      throw fallbackError;
+    }
+  }
+}
+
+/**
  * Image Generation Dialog
  */
 class QuickbrushDialog extends FormApplication {
@@ -177,6 +219,9 @@ class QuickbrushDialog extends FormApplication {
       // Show single notification that generation has started
       ui.notifications.info('Generating image... This may take 30-60 seconds. You\'ll be notified when it\'s ready!', { permanent: false });
 
+      // Load the core library dynamically
+      const core = await loadQuickbrushCore();
+
       // Convert reference images to base64 data URIs
       const referenceImagePaths = this.referenceImages || [];
       const base64ReferenceImages = referenceImagePaths.length > 0
@@ -184,8 +229,8 @@ class QuickbrushDialog extends FormApplication {
         : [];
 
       // Create OpenAI client and generator
-      const client = new QuickbrushCore.OpenAIClient(openaiApiKey);
-      const generator = QuickbrushCore.createGenerator(formData.generation_type, client);
+      const client = new core.OpenAIClient(openaiApiKey);
+      const generator = core.createGenerator(formData.generation_type, client);
 
       // Get selected model from settings
       const imageModel = game.settings.get(MODULE_ID, 'imageModel') || 'gpt-image-1-mini';
@@ -336,7 +381,7 @@ class QuickbrushGallery {
             </ul>
           </li>
           <li><strong>Aspect Ratio:</strong> Square (1024x1024), Landscape (1536x1024), or Portrait (1024x1536)</li>
-          <li><strong>Reference Images:</strong> Upload up to 3 reference images to guide the style (note: DALL-E 3 doesn't directly support reference images, but they help refine the description)</li>
+          <li><strong>Reference Images:</strong> Upload up to 3 reference images to guide the composition, style, and visual elements. Both GPT-Image-1 and GPT-Image-1-Mini support reference images to help create art that matches your vision!</li>
           <li><strong>Auto-Update:</strong> When generating from a character/item sheet, check this to automatically set the image</li>
         </ul>
 
@@ -352,21 +397,6 @@ class QuickbrushGallery {
 
         <h3>💰 Pricing & Costs</h3>
         <p>Since you're using your own OpenAI API key, you'll be billed directly by OpenAI based on their pricing:</p>
-        <p><strong>GPT-Image-1-Mini (Default - Faster & Cheaper):</strong></p>
-        <ul>
-          <li><strong>Standard (1024x1024):</strong> ~$0.015 per image</li>
-          <li><strong>Standard (1536x1024 or 1024x1536):</strong> ~$0.030 per image</li>
-          <li><strong>HD (1024x1024):</strong> ~$0.030 per image</li>
-          <li><strong>HD (1536x1024 or 1024x1536):</strong> ~$0.045 per image</li>
-        </ul>
-        <p><strong>GPT-Image-1 (Higher Quality):</strong></p>
-        <ul>
-          <li><strong>Standard (1024x1024):</strong> ~$0.040 per image</li>
-          <li><strong>Standard (1536x1024 or 1024x1536):</strong> ~$0.080 per image</li>
-          <li><strong>HD (1024x1024):</strong> ~$0.080 per image</li>
-          <li><strong>HD (1536x1024 or 1024x1536):</strong> ~$0.120 per image</li>
-        </ul>
-        <p><strong>Plus GPT-4o (description refinement):</strong> ~$0.001-0.005 per generation</p>
         <p>Check your usage at <a href="https://platform.openai.com/usage" target="_blank">OpenAI Platform Usage</a>!</p>
 
         <hr style="margin: 2em 0;">
@@ -533,6 +563,20 @@ Hooks.once('init', () => {
   console.log('Quickbrush | Initializing module');
 
   // Register settings
+  game.settings.register(MODULE_ID, 'coreLibraryUrl', {
+    name: game.i18n.localize('QUICKBRUSH.Settings.CoreLibraryUrl.Name'),
+    hint: game.i18n.localize('QUICKBRUSH.Settings.CoreLibraryUrl.Hint'),
+    scope: 'world',
+    config: true,
+    type: String,
+    default: 'https://quickbrush.ai/js/quickbrush-core.js',
+    onChange: () => {
+      // Reset the loaded library when URL changes
+      QuickbrushCore = null;
+      ui.notifications.info('Quickbrush: Core library URL updated. The new version will be loaded on next generation.');
+    }
+  });
+
   game.settings.register(MODULE_ID, 'openaiApiKey', {
     name: game.i18n.localize('QUICKBRUSH.Settings.OpenAIApiKey.Name'),
     hint: game.i18n.localize('QUICKBRUSH.Settings.OpenAIApiKey.Hint'),

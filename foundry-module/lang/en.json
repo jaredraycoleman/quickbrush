@@ -4,6 +4,10 @@
     "ButtonLabel": "Generate Image",
     "JournalButton": "Create with Quickbrush",
     "Settings": {
+      "CoreLibraryUrl": {
+        "Name": "Core Library URL",
+        "Hint": "URL to load the quickbrush-core.js library from. Change this to use a custom or updated version. Default: https://quickbrush.ai/js/quickbrush-core.js"
+      },
       "OpenAIApiKey": {
         "Name": "OpenAI API Key",
         "Hint": "Your OpenAI API key. Get one at https://platform.openai.com/api-keys"

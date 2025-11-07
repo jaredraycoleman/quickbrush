@@ -127,33 +127,23 @@ class OpenAIClient {
     quality = 'medium',
     background = 'transparent',
   }) {
-    let response;
+    const params = {
+      model,
+      prompt,
+      size,
+      quality: quality,
+      background, 
+      n: 1,
+      response_format: 'b64_json'
+    };
 
-    if (!referenceImages || referenceImages.length === 0) {
-      // Standard generation without reference images
-      response = await this._imageGeneration({
-        model,
-        prompt,
-        size,
-        quality: quality,
-        background, 
-        n: 1
-      });
-    } else {
-      // Use DALL-E edit endpoint with reference images
-      // Note: This requires the image to be edited, not just referenced
-      // For now, we'll use standard generation and note in the prompt
-      console.warn('Reference images provided but DALL-E 3 does not support reference images directly. Using prompt-based generation.');
-
-      response = await this._imageGeneration({
-        model,
-        prompt,
-        size,
-        quality: quality,
-        background,
-        n: 1
-      });
+    // Add reference images if provided
+    // GPT-Image-1 and GPT-Image-1-Mini support reference images
+    if (referenceImages && referenceImages.length > 0) {
+      params.reference_images = referenceImages;
     }
+
+    const response = await this._imageGeneration(params);
 
     if (!response.data || !response.data[0] || !response.data[0].b64_json) {
       throw new Error('No image data returned from OpenAI API.');
@@ -396,10 +386,31 @@ function createGenerator(type, openaiClient) {
   }
 }
 
-// Export for use in modules
-if (typeof module !== 'undefined' && module.exports) {
-  // Node.js environment
-  module.exports = {
+// ES6 Module exports (for dynamic import)
+export {
+  OpenAIClient,
+  ImageGenerator,
+  CharacterImageGenerator,
+  SceneImageGenerator,
+  CreatureImageGenerator,
+  ItemImageGenerator,
+  createGenerator
+};
+
+// Also export as default for convenience
+export default {
+  OpenAIClient,
+  ImageGenerator,
+  CharacterImageGenerator,
+  SceneImageGenerator,
+  CreatureImageGenerator,
+  ItemImageGenerator,
+  createGenerator
+};
+
+// Browser global (for backwards compatibility)
+if (typeof window !== 'undefined') {
+  window.QuickbrushCore = {
     OpenAIClient,
     ImageGenerator,
     CharacterImageGenerator,
@@ -408,9 +419,11 @@ if (typeof module !== 'undefined' && module.exports) {
     ItemImageGenerator,
     createGenerator
   };
-} else {
-  // Browser environment
-  window.QuickbrushCore = {
+}
+
+// Node.js CommonJS (for backwards compatibility)
+if (typeof module !== 'undefined' && module.exports) {
+  module.exports = {
     OpenAIClient,
     ImageGenerator,
     CharacterImageGenerator,
