@@ -154,8 +154,8 @@ fi
 if [ "$platform_choice" == "1" ] || [ "$platform_choice" == "3" ]; then
     print_info "Updating Foundry module version..."
 
-    # Update module.json
-    jq ".version = \"$NEW_FOUNDRY_VERSION\" | .download = \"https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/download/foundry-v$NEW_FOUNDRY_VERSION/quickbrush-foundry-v$NEW_FOUNDRY_VERSION.zip\"" \
+    # Update module.json version only (download URL uses /latest/download/ pattern)
+    jq ".version = \"$NEW_FOUNDRY_VERSION\"" \
         foundry-module/module.json > foundry-module/module.json.tmp
     mv foundry-module/module.json.tmp foundry-module/module.json
 
@@ -170,9 +170,11 @@ if [ "$platform_choice" == "1" ] || [ "$platform_choice" == "3" ]; then
     print_info "Preparing Foundry release files..."
     cp -r foundry-module/* "$FOUNDRY_RELEASE_DIR/"
 
-    # Create zip file
+    # Create zip file with both versioned and generic names
     cd "$PROJECT_ROOT/releases"
     zip -r "quickbrush-foundry-v$NEW_FOUNDRY_VERSION.zip" "foundry-v$NEW_FOUNDRY_VERSION"
+    # Also create a copy with the generic name for /latest/download/ URL
+    cp "quickbrush-foundry-v$NEW_FOUNDRY_VERSION.zip" "quickbrush-foundry.zip"
 
     print_info "Created Foundry release zip: quickbrush-foundry-v$NEW_FOUNDRY_VERSION.zip"
 
@@ -258,31 +260,29 @@ if [ "$platform_choice" == "1" ] || [ "$platform_choice" == "3" ]; then
         --title "Foundry Module v$NEW_FOUNDRY_VERSION" \
         --notes "$release_notes" \
         "releases/quickbrush-foundry-v$NEW_FOUNDRY_VERSION.zip" \
+        "releases/quickbrush-foundry.zip#quickbrush-foundry.zip" \
         "foundry-module/module.json#module.json"
-
-    # Also create/update 'latest-foundry' tag
-    git tag -f "latest-foundry" "foundry-v$NEW_FOUNDRY_VERSION"
-    git push -f origin "latest-foundry"
 
     print_info "✓ Foundry release created: foundry-v$NEW_FOUNDRY_VERSION"
 fi
 
 if [ "$platform_choice" == "2" ] || [ "$platform_choice" == "3" ]; then
-    print_info "Creating Obsidian GitHub release..."
+    print_info "Creating Obsidian GitHub release in submodule repository..."
 
-    gh release create "obsidian-v$NEW_OBSIDIAN_VERSION" \
-        --title "Obsidian Plugin v$NEW_OBSIDIAN_VERSION" \
+    # Create release in the submodule repository
+    cd quickbrush-obsidian-plugin
+
+    gh release create "v$NEW_OBSIDIAN_VERSION" \
+        --title "v$NEW_OBSIDIAN_VERSION" \
         --notes "$release_notes" \
-        "releases/quickbrush-obsidian-v$NEW_OBSIDIAN_VERSION.zip" \
-        "releases/obsidian-v$NEW_OBSIDIAN_VERSION/main.js#main.js" \
-        "releases/obsidian-v$NEW_OBSIDIAN_VERSION/manifest.json#manifest.json" \
-        "releases/obsidian-v$NEW_OBSIDIAN_VERSION/styles.css#styles.css"
+        "../releases/quickbrush-obsidian-v$NEW_OBSIDIAN_VERSION.zip" \
+        "main.js#main.js" \
+        "manifest.json#manifest.json" \
+        "styles.css#styles.css"
 
-    # Also create/update 'latest-obsidian' tag
-    git tag -f "latest-obsidian" "obsidian-v$NEW_OBSIDIAN_VERSION"
-    git push -f origin "latest-obsidian"
+    cd "$PROJECT_ROOT"
 
-    print_info "✓ Obsidian release created: obsidian-v$NEW_OBSIDIAN_VERSION"
+    print_info "✓ Obsidian release created: v$NEW_OBSIDIAN_VERSION"
 fi
 
 # Cleanup
@@ -300,7 +300,12 @@ if [ "$platform_choice" == "1" ] || [ "$platform_choice" == "3" ]; then
 fi
 
 if [ "$platform_choice" == "2" ] || [ "$platform_choice" == "3" ]; then
+    # Get the submodule repository name
+    cd quickbrush-obsidian-plugin
+    OBSIDIAN_REPO=$(gh repo view --json nameWithOwner -q .nameWithOwner)
+    cd "$PROJECT_ROOT"
+
     print_info "Obsidian Plugin:"
     print_info "  Version: v$NEW_OBSIDIAN_VERSION"
-    print_info "  Release: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/releases/tag/obsidian-v$NEW_OBSIDIAN_VERSION"
+    print_info "  Release: https://github.com/$OBSIDIAN_REPO/releases/tag/v$NEW_OBSIDIAN_VERSION"
 fi
