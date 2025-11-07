@@ -2,6 +2,12 @@
 static/generated/
 static/foundry-module/
 
+# Node modules
+node_modules/
+
+# Release artifacts (temporary)
+releases/
+
 # Secrets and deployment configuration
 .env.deploy
 deployment/secrets.json

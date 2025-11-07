@@ -7,6 +7,7 @@ const MODULE_ID = 'quickbrush';
 
 /**
  * Load QuickbrushCore library dynamically
+ * The core library is bundled from packages/quickbrush-core
  */
 let QuickbrushCore = null;
 
@@ -15,35 +16,21 @@ async function loadQuickbrushCore() {
     return QuickbrushCore; // Already loaded
   }
 
-  const coreUrl = game.settings.get(MODULE_ID, 'coreLibraryUrl');
-  
-  // Convert relative path to absolute URL for the fallback
-  const fallbackRelativePath = 'modules/quickbrush/scripts/quickbrush-core.js';
-  const fallbackUrl = new URL(fallbackRelativePath, window.location.origin).href;
+  // Load the bundled core library
+  const coreUrl = 'modules/quickbrush/scripts/quickbrush-core.js';
+  const absoluteUrl = new URL(coreUrl, window.location.origin).href;
 
-  console.log(`Quickbrush | Loading core library from: ${coreUrl}`);
+  console.log(`Quickbrush | Loading core library from: ${absoluteUrl}`);
 
   try {
-    // Try loading from the configured URL
-    const module = await import(coreUrl);
+    const module = await import(absoluteUrl);
     QuickbrushCore = module.QuickbrushCore || module;
-    console.log('Quickbrush | Core library loaded successfully from:', coreUrl);
+    console.log('Quickbrush | Core library loaded successfully');
     return QuickbrushCore;
   } catch (error) {
-    console.warn(`Quickbrush | Failed to load core library from ${coreUrl}, trying fallback...`, error);
-
-    try {
-      // Fallback to bundled version (using absolute URL)
-      console.log(`Quickbrush | Attempting fallback URL: ${fallbackUrl}`);
-      const module = await import(fallbackUrl);
-      QuickbrushCore = module.QuickbrushCore || module;
-      console.log('Quickbrush | Core library loaded from fallback:', fallbackUrl);
-      return QuickbrushCore;
-    } catch (fallbackError) {
-      console.error('Quickbrush | Failed to load core library from both remote and fallback URLs', fallbackError);
-      ui.notifications.error('Quickbrush: Failed to load core library. Please check your settings or module installation.');
-      throw fallbackError;
-    }
+    console.error('Quickbrush | Failed to load core library', error);
+    ui.notifications.error('Quickbrush: Failed to load core library. Please check your module installation.');
+    throw error;
   }
 }
 
@@ -371,8 +358,8 @@ class QuickbrushGallery {
         <h3>🖼️ Generation Options</h3>
         <ul>
           <li><strong>Generation Type:</strong> Choose Character, Scene, Creature, or Item to guide my artistic style</li>
-          <li><strong>Description:</strong> Long-form text describing what you want me to paint. Feel free to include as much detail as you like! I'll hone in on the key elements.</li>
-          <li><strong>Context Prompt (Optional):</strong> Specific instructions on what to paint</li>
+          <li><strong>Description:</strong> Long-form text describing the subject (e.g., journal entry, character background). May include irrelevant details — I'll focus on the physical description!</li>
+          <li><strong>Context Prompt (Optional):</strong> Specific instructions about what to focus on (e.g., "wearing a red cloak", "in a defensive stance", "at sunset"). <em>This takes priority over the description!</em></li>
           <li><strong>Quality:</strong>
             <ul>
               <li><strong>Low (Standard):</strong> Fast generation, lower cost</li>
@@ -563,20 +550,6 @@ Hooks.once('init', () => {
   console.log('Quickbrush | Initializing module');
 
   // Register settings
-  game.settings.register(MODULE_ID, 'coreLibraryUrl', {
-    name: game.i18n.localize('QUICKBRUSH.Settings.CoreLibraryUrl.Name'),
-    hint: game.i18n.localize('QUICKBRUSH.Settings.CoreLibraryUrl.Hint'),
-    scope: 'world',
-    config: true,
-    type: String,
-    default: 'https://quickbrush.ai/js/quickbrush-core.js',
-    onChange: () => {
-      // Reset the loaded library when URL changes
-      QuickbrushCore = null;
-      ui.notifications.info('Quickbrush: Core library URL updated. The new version will be loaded on next generation.');
-    }
-  });
-
   game.settings.register(MODULE_ID, 'openaiApiKey', {
     name: game.i18n.localize('QUICKBRUSH.Settings.OpenAIApiKey.Name'),
     hint: game.i18n.localize('QUICKBRUSH.Settings.OpenAIApiKey.Hint'),

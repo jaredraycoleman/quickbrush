@@ -128,7 +128,19 @@
                 <textarea class="form-control" id="description" rows="4" required
                           placeholder="Describe what you want to generate..."></textarea>
                 <small class="form-text text-muted">
-                  Be as detailed as you like! The AI will refine your description before generating.
+                  Long-form text (e.g., journal entry, character background) that may contain irrelevant details. Focus will be on physical description.
+                </small>
+              </div>
+
+              <!-- Context Prompt (Optional) -->
+              <div class="mb-3">
+                <label for="contextPrompt" class="form-label">
+                  Context Prompt <span class="text-muted">(optional)</span>
+                </label>
+                <input type="text" class="form-control" id="contextPrompt"
+                       placeholder="e.g., 'wearing a red cloak', 'in a defensive stance', 'at sunset'">
+                <small class="form-text text-muted">
+                  Specific instructions about what to focus on. This takes priority over the description above.
                 </small>
               </div>
 
@@ -313,6 +325,7 @@
     // Get form data
     const generationType = document.getElementById('generationType').value;
     const description = document.getElementById('description').value;
+    const contextPrompt = document.getElementById('contextPrompt').value.trim() || null;
     const model = document.getElementById('model').value;
     const quality = document.getElementById('quality').value;
     const aspectRatio = document.getElementById('aspectRatio').value;
@@ -343,7 +356,7 @@
 
       // Step 1: Refine description
       progressText.textContent = 'Step 1/2: Refining description with GPT-4o...';
-      const refinedDescription = await generator.getDescription(description, null, referenceImages);
+      const refinedDescription = await generator.getDescription(description, contextPrompt, referenceImages);
       console.log('Refined description:', refinedDescription);
 
       // Step 2: Generate image

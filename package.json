@@ -1,0 +1,28 @@
+{
+  "name": "quickbrush-monorepo",
+  "version": "1.0.0",
+  "description": "Quickbrush - AI-powered fantasy RPG artwork generator",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "quickbrush-obsidian-plugin"
+  ],
+  "scripts": {
+    "install-all": "npm install",
+    "sync-core": "bash scripts/sync-core.sh",
+    "build:foundry": "npm run sync-core && echo 'Foundry module ready (uses bundled core)'",
+    "build:obsidian": "cd quickbrush-obsidian-plugin && npm run build",
+    "build:website": "npm run sync-core && echo 'Website ready (uses bundled core)'",
+    "build:all": "npm run sync-core && npm run build:obsidian",
+    "release": "bash scripts/release.sh"
+  },
+  "keywords": [
+    "quickbrush",
+    "ai",
+    "image-generation",
+    "foundry-vtt",
+    "obsidian"
+  ],
+  "author": "",
+  "license": "MIT"
+}

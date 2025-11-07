@@ -1,0 +1,29 @@
+{
+  "name": "@quickbrush/core",
+  "version": "1.0.0",
+  "description": "Reusable image generation logic for Quickbrush across multiple platforms",
+  "main": "src/index.js",
+  "types": "src/index.d.ts",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.d.ts",
+      "default": "./src/index.js"
+    }
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "quickbrush",
+    "image-generation",
+    "openai"
+  ],
+  "author": "",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/yourusername/quickbrush.git",
+    "directory": "packages/quickbrush-core"
+  }
+}

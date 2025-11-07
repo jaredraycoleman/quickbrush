@@ -28,10 +28,10 @@
     "Dialog": {
       "Title": "Generate Image with Quickbrush",
       "Description": "Description",
-      "DescriptionPlaceholder": "Long-form text of what you want to generate. Feel free to copy/paste entire journal entries, notes, etc. We can hone in on what's important.",
+      "DescriptionPlaceholder": "Long-form text (e.g., journal entry, character background). May contain irrelevant details - we'll focus on physical description.",
       "ImageName": "Image Name",
       "Prompt": "Context Prompt (optional)",
-      "PromptPlaceholder": "Add mood, pose, or details about exactly what you want to see.",
+      "PromptPlaceholder": "e.g., 'wearing a red cloak', 'in a defensive stance', 'at sunset'",
       "Type": "What do you want to paint?",
       "Types": {
         "character": "🎭 Character",
