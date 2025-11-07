@@ -1,16 +1,20 @@
 {
   "QUICKBRUSH": {
-    "Title": "Quickbrush AI Image Generator",
+    "Title": "Quickbrush Image Generator",
     "ButtonLabel": "Generate Image",
     "JournalButton": "Create with Quickbrush",
     "Settings": {
-      "ApiKey": {
-        "Name": "API Key",
-  "Hint": "Your Quickbrush API key. Get one at https://quickbrush.ai/dashboard"
+      "OpenAIApiKey": {
+        "Name": "OpenAI API Key",
+        "Hint": "Your OpenAI API key. Get one at https://platform.openai.com/api-keys"
       },
-      "ApiUrl": {
-        "Name": "API URL",
-  "Hint": "Quickbrush API endpoint (default: https://quickbrush.ai/api)"
+      "ImageModel": {
+        "Name": "Image Model",
+        "Hint": "Which OpenAI image model to use. Mini is faster and cheaper, Standard is higher quality.",
+        "Choices": {
+          "mini": "GPT-Image-1-Mini (Faster, Cheaper)",
+          "standard": "GPT-Image-1 (Higher Quality)"
+        }
       },
       "SaveFolder": {
         "Name": "Image Save Folder",
@@ -33,28 +37,26 @@
       },
       "Quality": "Quality",
       "Qualities": {
-        "low": "Low (1 brushstroke)",
-        "medium": "Medium (3 brushstrokes)",
-        "high": "High (5 brushstrokes)"
+        "low": "Low (Standard)",
+        "medium": "Medium (Standard)",
+        "high": "High (HD)"
       },
       "AspectRatio": "Aspect Ratio",
       "AspectRatios": {
         "square": "Square (1024x1024)",
-        "landscape": "Landscape (1536x1024)",
-        "portrait": "Portrait (1024x1536)"
+        "landscape": "Landscape (1792x1024)",
+        "portrait": "Portrait (1024x1792)"
       },
       "Generate": "Generate Image",
       "Cancel": "Cancel"
     },
     "Notifications": {
-      "NoApiKey": "Please set your Quickbrush API key in module settings",
+      "NoApiKey": "Please set your OpenAI API key in module settings",
       "Generating": "Generating image with Quickbrush. We'll notify you when it's ready!",
       "Success": "Image generated successfully!",
       "Error": "Failed to generate image: {error}",
       "Saved": "Image saved to {folder}",
-      "GalleryUpdated": "Quickbrush Gallery updated",
-      "RateLimit": "Rate limit exceeded. Please wait before generating another image.",
-  "InsufficientBrushstrokes": "Insufficient brushstrokes. Visit https://quickbrush.ai/dashboard to purchase more."
+      "GalleryUpdated": "Quickbrush Gallery updated"
     },
     "Gallery": {
       "Title": "Quickbrush Gallery",

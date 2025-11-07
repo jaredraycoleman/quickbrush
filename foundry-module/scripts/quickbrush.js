@@ -1,136 +1,9 @@
 /**
- * Quickbrush AI Image Generator for Foundry VTT
- * Generate fantasy RPG artwork using Quickbrush API
+ * Quickbrush Image Generator for Foundry VTT
+ * Generate fantasy RPG artwork using your own OpenAI API key
  */
 
 const MODULE_ID = 'quickbrush';
-const API_ENDPOINT = 'https://quickbrush.ai/api';
-
-/**
- * Quickbrush API Client
- */
-class QuickbrushAPI {
-  constructor() {
-    this.apiKey = game.settings.get(MODULE_ID, 'apiKey');
-    this.apiUrl = game.settings.get(MODULE_ID, 'apiUrl') || API_ENDPOINT;
-  }
-
-  /**
-   * Generate an image using Quickbrush API
-   */
-  async generateImage({ text, image_name, prompt = '', generation_type = 'character', quality = 'medium', aspect_ratio = 'square', reference_image_paths = [] }) {
-    if (!this.apiKey) {
-      throw new Error(game.i18n.localize('QUICKBRUSH.Notifications.NoApiKey'));
-    }
-
-    const requestBody = {
-      text,
-      image_name,
-      prompt,
-      generation_type,
-      quality,
-      aspect_ratio,
-      reference_image_paths
-    };
-
-    const response = await fetch(`${this.apiUrl}/generate`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${this.apiKey}`
-      },
-      body: JSON.stringify(requestBody)
-    });
-
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: response.statusText }));
-
-      console.error('Quickbrush API error:', response.status, error);
-
-      // Handle specific error types
-      if (response.status === 429) {
-        throw new Error(game.i18n.localize('QUICKBRUSH.Notifications.RateLimit'));
-      } else if (response.status === 402) {
-        throw new Error(game.i18n.localize('QUICKBRUSH.Notifications.InsufficientBrushstrokes'));
-      } else if (response.status === 422) {
-        // Validation error - extract meaningful message
-        let message = 'Validation failed';
-        if (Array.isArray(error.detail)) {
-          // FastAPI validation errors are arrays
-          message = error.detail.map(e => `${e.loc?.join('.')}: ${e.msg}`).join(', ');
-        } else if (error.detail) {
-          message = typeof error.detail === 'string' ? error.detail : JSON.stringify(error.detail);
-        }
-        console.error('Validation errors:', error.detail);
-        throw new Error(`Validation error: ${message}`);
-      }
-
-      const errorMsg = error.detail || error.message || (typeof error === 'string' ? error : JSON.stringify(error)) || 'Unknown error';
-      throw new Error(errorMsg);
-    }
-
-    return await response.json();
-  }
-
-  /**
-   * Download image from Quickbrush
-   */
-  async downloadImage(imageUrl) {
-    const response = await fetch(imageUrl, {
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`
-      }
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to download image: ${response.statusText}`);
-    }
-    return await response.blob();
-  }
-
-  /**
-   * Get rate limit status
-   */
-  async getRateLimitStatus() {
-    if (!this.apiKey) return null;
-
-    try {
-      const response = await fetch(`${this.apiUrl}/rate-limit`, {
-        headers: {
-          'Authorization': `Bearer ${this.apiKey}`
-        }
-      });
-
-      if (response.ok) {
-        return await response.json();
-      }
-    } catch (err) {
-      console.warn('Failed to get rate limit status:', err);
-    }
-
-    return null;
-  }
-
-  /**
-   * Get all generations from library
-   */
-  async getGenerations(limit = 100) {
-    if (!this.apiKey) {
-      throw new Error(game.i18n.localize('QUICKBRUSH.Notifications.NoApiKey'));
-    }
-
-    const response = await fetch(`${this.apiUrl}/generations?limit=${limit}`, {
-      headers: {
-        'Authorization': `Bearer ${this.apiKey}`
-      }
-    });
-
-    if (!response.ok) {
-      throw new Error(`Failed to fetch generations: ${response.statusText}`);
-    }
-
-    return await response.json();
-  }
-}
 
 /**
  * Image Generation Dialog
@@ -184,7 +57,7 @@ class QuickbrushDialog extends FormApplication {
       image_name: this.data.image_name || this.targetDocument?.name || '',
       prompt: this.data.prompt || '',
       generation_type: this.data.generation_type || 'character',
-      quality: this.data.quality || 'medium',
+      quality: this.data.quality || 'high',
       aspect_ratio: this.data.aspect_ratio || 'square',
       referenceImages: this.referenceImages,
       targetDocument: this.targetDocument,
@@ -242,7 +115,7 @@ class QuickbrushDialog extends FormApplication {
 
   /**
    * Convert image paths to base64 data URIs
-   * This ensures images can be sent over the API without authentication issues
+   * This ensures images can be sent to OpenAI API
    */
   async convertImagesToBase64(imagePaths) {
     const base64Images = [];
@@ -290,51 +163,61 @@ class QuickbrushDialog extends FormApplication {
       return;
     }
 
-    const api = new QuickbrushAPI();
+    // Check for OpenAI API key
+    const openaiApiKey = game.settings.get(MODULE_ID, 'openaiApiKey');
+    if (!openaiApiKey) {
+      ui.notifications.error('Please configure your OpenAI API key in module settings first.');
+      return;
+    }
 
     try {
       // Close the dialog immediately so user can continue working
       this.close();
 
       // Show single notification that generation has started
-      ui.notifications.info('Generating image... You\'ll be notified when it\'s ready!', { permanent: false });
+      ui.notifications.info('Generating image... This may take 30-60 seconds. You\'ll be notified when it\'s ready!', { permanent: false });
 
       // Convert reference images to base64 data URIs
-      // This avoids authentication issues when the API tries to fetch them
       const referenceImagePaths = this.referenceImages || [];
       const base64ReferenceImages = referenceImagePaths.length > 0
         ? await this.convertImagesToBase64(referenceImagePaths)
         : [];
 
-      // Add reference images to formData
-      formData.reference_image_paths = base64ReferenceImages;
+      // Create OpenAI client and generator
+      const client = new QuickbrushCore.OpenAIClient(openaiApiKey);
+      const generator = QuickbrushCore.createGenerator(formData.generation_type, client);
 
-      // Generate image
-      const result = await api.generateImage(formData);
+      // Get selected model from settings
+      const imageModel = game.settings.get(MODULE_ID, 'imageModel') || 'gpt-image-1-mini';
 
-      // Download image - construct full URL if relative
-      let imageUrl = result.image_url;
-      if (imageUrl.startsWith('/')) {
-        // Remove /api from apiUrl if it exists, since result.image_url already includes /api
-        const baseUrl = api.apiUrl.replace(/\/api$/, '');
-        imageUrl = `${baseUrl}${imageUrl}`;
-      }
-      const imageBlob = await api.downloadImage(imageUrl);
+      // Step 1: Extract/refine description
+      ui.notifications.info('Step 1/2: Refining description...', { permanent: false });
+      const description = await generator.getDescription(
+        formData.text,
+        formData.prompt || null,
+        base64ReferenceImages
+      );
+
+      console.log('Quickbrush | Refined description:', description.text);
+
+      // Step 2: Generate image
+      ui.notifications.info('Step 2/2: Generating image...', { permanent: false });
+      const imageBlob = await generator.generateImage({
+        description: description.text,
+        referenceImages: base64ReferenceImages,
+        model: imageModel,
+        quality: formData.quality,
+        aspectRatio: formData.aspect_ratio
+      });
 
       // Save to Foundry
       const folder = await QuickbrushGallery.getOrCreateFolder();
 
-      // Use image name if available, otherwise use generation_id
-      let filename;
-      if (result.image_name) {
-        // Sanitize the image name for filesystem
-        const sanitized = result.image_name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
-        filename = `${sanitized}.webp`;
-      } else {
-        filename = `quickbrush-${result.generation_id}.webp`;
-      }
+      // Use image name if available
+      const sanitized = formData.image_name.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-');
+      const filename = `${sanitized}-${Date.now()}.png`;
 
-      const file = new File([imageBlob], filename, { type: 'image/webp' });
+      const file = new File([imageBlob], filename, { type: 'image/png' });
 
       const uploadResult = await FilePicker.upload('data', folder, file);
 
@@ -346,9 +229,8 @@ class QuickbrushDialog extends FormApplication {
         prompt: formData.prompt,
         quality: formData.quality,
         aspectRatio: formData.aspect_ratio,
-        generationId: result.generation_id,
-        refinedDescription: result.refined_description,
-        imageName: result.image_name
+        refinedDescription: description.text,
+        imageName: formData.image_name
       });
 
       // Auto-update target document image if requested
@@ -402,7 +284,7 @@ class QuickbrushGallery {
           <strong>Greetings, dear adventurer!</strong>
         </p>
         <p>
-          I'm <strong>Wispy Quickbrush</strong>, halfling artist extraordinaire and your magical companion in creating breathtaking artwork for your campaigns! With a flick of my enchanted brush and a sprinkle of arcane artistry, I can bring your characters, creatures, items, and scenes to life faster than a wizard can say "prestidigitation!"
+          I'm <strong>Wispy Quickbrush</strong>, halfling artist extraordinaire and your magical companion in creating breathtaking artwork for your campaigns! With a flick of my enchanted brush and the power of AI, I can bring your characters, creatures, items, and scenes to life faster than a wizard can say "prestidigitation!"
         </p>
         <p>
           Whether you need a portrait of a noble paladin, a fearsome dragon, or a mysterious magical artifact, I'm here to help paint your imagination onto the canvas of reality. Well... digital reality, at least! 🖌️✨
@@ -410,12 +292,19 @@ class QuickbrushGallery {
 
         <h2>📖 How to Use Quickbrush</h2>
 
-        <h3>🔑 First Things First: Setting Up Your API Key</h3>
+        <h3>🔑 First Things First: Setting Up Your OpenAI API Key</h3>
+        <p>Quickbrush now uses a <strong>Bring Your Own Key</strong> model - you'll use your own OpenAI API key:</p>
         <ol>
-          <li>Visit <a href="https://quickbrush.ai" target="_blank">quickbrush.ai</a> and create an account</li>
-          <li>Copy your API key from your account dashboard</li>
+          <li>Visit <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI Platform</a> and create an account</li>
+          <li>Generate an API key from your account dashboard</li>
+          <li>Add credits to your OpenAI account at <a href="https://platform.openai.com/account/billing" target="_blank">OpenAI Billing</a></li>
           <li>In Foundry VTT, go to <strong>Settings</strong> → <strong>Configure Settings</strong> → <strong>Module Settings</strong></li>
-          <li>Find <strong>Quickbrush</strong> and paste your API key in the <strong>API Key</strong> field</li>
+          <li>Find <strong>Quickbrush</strong> and configure:
+            <ul>
+              <li>Paste your OpenAI API key in the <strong>OpenAI API Key</strong> field</li>
+              <li>Choose your preferred <strong>Image Model</strong> (GPT-Image-1-Mini is default, faster and cheaper)</li>
+            </ul>
+          </li>
           <li>Click <strong>Save Changes</strong> and you're ready to create!</li>
         </ol>
 
@@ -439,32 +328,46 @@ class QuickbrushGallery {
           <li><strong>Generation Type:</strong> Choose Character, Scene, Creature, or Item to guide my artistic style</li>
           <li><strong>Description:</strong> Long-form text describing what you want me to paint. Feel free to include as much detail as you like! I'll hone in on the key elements.</li>
           <li><strong>Context Prompt (Optional):</strong> Specific instructions on what to paint</li>
-          <li><strong>Quality:</strong> Low (fast & cheap), Medium (balanced), or High (detailed & beautiful)</li>
-          <li><strong>Aspect Ratio:</strong> Square, Landscape, or Portrait</li>
-          <li><strong>Reference Images:</strong> Upload up to 3 reference images to guide the style</li>
+          <li><strong>Quality:</strong>
+            <ul>
+              <li><strong>Low (Standard):</strong> Fast generation, lower cost</li>
+              <li><strong>Medium (Standard):</strong> Balanced quality and cost</li>
+              <li><strong>High (HD):</strong> Best quality, higher cost</li>
+            </ul>
+          </li>
+          <li><strong>Aspect Ratio:</strong> Square (1024x1024), Landscape (1536x1024), or Portrait (1024x1536)</li>
+          <li><strong>Reference Images:</strong> Upload up to 3 reference images to guide the style (note: DALL-E 3 doesn't directly support reference images, but they help refine the description)</li>
           <li><strong>Auto-Update:</strong> When generating from a character/item sheet, check this to automatically set the image</li>
         </ul>
 
         <h3>📸 Your Gallery</h3>
         <p>All your generated images are automatically saved to this journal's <strong>Images</strong> page! You can browse your artistic collection, copy images to use elsewhere, or just admire my handiwork. 😊</p>
 
-        <p>Use the <strong>🔄 Quickbrush Sync</strong> button in the Journal tab to sync your online library with Foundry!</p>
-
         <h2>⚠️ Important Information</h2>
 
         <h3>🤖 AI-Powered Art</h3>
-        <p>Quickbrush uses artificial intelligence to generate images based on your descriptions. While I do my best to create exactly what you envision, AI-generated art can sometimes be... creative! You might occasionally get unexpected results, unusual anatomy, or mysterious extra fingers. That's just part of the magical chaos! 🎲</p>
+        <p>Quickbrush uses OpenAI's GPT-Image models (GPT-Image-1 or GPT-Image-1-Mini) to generate images based on your descriptions. While I do my best to create exactly what you envision, AI-generated art can sometimes be... creative! You might occasionally get unexpected results, unusual anatomy, or mysterious extra fingers. That's just part of the magical chaos! 🎲</p>
 
-        <p><strong>Please note:</strong> Generated images are subject to the content policies of our AI provider. Keep your prompts family-friendly and in line with the heroic spirit of adventure!</p>
+        <p><strong>Please note:</strong> Generated images are subject to OpenAI's content policies. Keep your prompts family-friendly and in line with the heroic spirit of adventure!</p>
 
-        <h3>💎 Brushstrokes & Pricing</h3>
-        <p>Each generation consumes <strong>brushstrokes</strong> from your Quickbrush account:</p>
+        <h3>💰 Pricing & Costs</h3>
+        <p>Since you're using your own OpenAI API key, you'll be billed directly by OpenAI based on their pricing:</p>
+        <p><strong>GPT-Image-1-Mini (Default - Faster & Cheaper):</strong></p>
         <ul>
-          <li><strong>Low Quality:</strong> Fewer brushstrokes, faster generation</li>
-          <li><strong>Medium Quality:</strong> Balanced cost and quality</li>
-          <li><strong>High Quality:</strong> More brushstrokes, stunning detail</li>
+          <li><strong>Standard (1024x1024):</strong> ~$0.015 per image</li>
+          <li><strong>Standard (1536x1024 or 1024x1536):</strong> ~$0.030 per image</li>
+          <li><strong>HD (1024x1024):</strong> ~$0.030 per image</li>
+          <li><strong>HD (1536x1024 or 1024x1536):</strong> ~$0.045 per image</li>
         </ul>
-  <p>Check your brushstrokes balance at <a href="https://quickbrush.ai" target="_blank">quickbrush.ai</a>!</p>
+        <p><strong>GPT-Image-1 (Higher Quality):</strong></p>
+        <ul>
+          <li><strong>Standard (1024x1024):</strong> ~$0.040 per image</li>
+          <li><strong>Standard (1536x1024 or 1024x1536):</strong> ~$0.080 per image</li>
+          <li><strong>HD (1024x1024):</strong> ~$0.080 per image</li>
+          <li><strong>HD (1536x1024 or 1024x1536):</strong> ~$0.120 per image</li>
+        </ul>
+        <p><strong>Plus GPT-4o (description refinement):</strong> ~$0.001-0.005 per generation</p>
+        <p>Check your usage at <a href="https://platform.openai.com/usage" target="_blank">OpenAI Platform Usage</a>!</p>
 
         <hr style="margin: 2em 0;">
 
@@ -475,7 +378,7 @@ class QuickbrushGallery {
           — Wispy Quickbrush 🎨✨
         </p>
         <p style="text-align: center; font-size: 0.9em; margin-top: 1.5em;">
-          Quickbrush Module v1.0.3 | <a href="https://quickbrush.ai" target="_blank">quickbrush.ai</a>
+          Quickbrush Module v2.0.0
         </p>
       </div>
     `;
@@ -553,7 +456,7 @@ class QuickbrushGallery {
   /**
    * Add an image to the gallery
    */
-  static async addToGallery({ imageUrl, type, description, prompt, quality, aspectRatio, generationId, refinedDescription, imageName }) {
+  static async addToGallery({ imageUrl, type, description, prompt, quality, aspectRatio, refinedDescription, imageName }) {
     const journal = await this.getOrCreateGalleryJournal();
     const date = new Date().toLocaleString();
 
@@ -590,185 +493,6 @@ class QuickbrushGallery {
     });
 
     // Don't show notification here - let the caller show a single comprehensive notification
-  }
-
-  /**
-   * Sync library images to gallery
-   * Downloads missing images and adds them to the gallery
-   */
-  /**
-   * Sync library from QuickBrush API (improved robust version)
-   * Downloads all images, saves metadata, and rebuilds gallery from scratch
-   */
-  static async syncFromLibrary() {
-    ui.notifications.info('Syncing Quickbrush library...');
-
-    try {
-      const api = new QuickbrushAPI();
-      const folder = await this.getOrCreateFolder();
-      const metadataFolder = `${folder}/.quickbrush-metadata`;
-      
-      // Create metadata folder
-      try {
-        await FilePicker.createDirectory('data', metadataFolder);
-      } catch (err) {
-        // Folder might already exist
-      }
-
-      const journal = await this.getOrCreateGalleryJournal();
-
-      // Fetch all generations from API
-      const response = await api.getGenerations(100);
-      const generations = response.generations || [];
-
-      if (generations.length === 0) {
-        ui.notifications.info('No images found in library');
-        return;
-      }
-
-      ui.notifications.info(`Downloading ${generations.length} images...`);
-
-      let downloadedCount = 0;
-
-      // Download all images and save metadata
-      for (const gen of generations) {
-        const generationId = gen.id;
-
-        try {
-          // Sanitize filename
-          const sanitizedName = gen.image_name?.replace(/[^\w\s-]/g, '').trim().replace(/\s+/g, '-') || `quickbrush-${generationId}`;
-          const filename = `${sanitizedName}.webp`;
-          const metadataFilename = `${generationId}.json`;
-
-          // Download image - construct full URL if relative
-          let imageUrl = gen.image_url;
-          if (imageUrl.startsWith('/')) {
-            const baseUrl = api.apiUrl.replace(/\/api$/, '');
-            imageUrl = `${baseUrl}${imageUrl}`;
-          }
-          const imageBlob = await api.downloadImage(imageUrl);
-
-          // Save image (overwrite if exists)
-          const file = new File([imageBlob], filename, { type: 'image/webp' });
-          const uploadResult = await FilePicker.upload('data', folder, file, { bucket: null });
-
-          // Save metadata as JSON
-          const metadata = {
-            id: generationId,
-            image_name: gen.image_name,
-            image_path: uploadResult.path,
-            generation_type: gen.generation_type,
-            quality: gen.quality,
-            aspect_ratio: gen.aspect_ratio,
-            user_text: gen.user_text,
-            user_prompt: gen.user_prompt,
-            brushstrokes_used: gen.brushstrokes_used,
-            created_at: gen.created_at,
-            completed_at: gen.completed_at
-          };
-
-          // Save metadata to file
-          const metadataBlob = new Blob([JSON.stringify(metadata, null, 2)], { type: 'application/json' });
-          const metadataFile = new File([metadataBlob], metadataFilename, { type: 'application/json' });
-          await FilePicker.upload('data', metadataFolder, metadataFile, { bucket: null });
-
-          downloadedCount++;
-        } catch (err) {
-          console.error(`Failed to download generation ${generationId}:`, err);
-        }
-      }
-
-      ui.notifications.info(`Downloaded ${downloadedCount} images. Rebuilding gallery...`);
-
-      // Now rebuild the gallery from metadata files
-      await this.rebuildGalleryFromMetadata(journal, metadataFolder, folder);
-
-      ui.notifications.info(`Gallery sync complete! ${downloadedCount} images synced.`);
-
-    } catch (error) {
-      console.error('Failed to sync library:', error);
-      ui.notifications.error(`Failed to sync library: ${error.message}`);
-    }
-  }
-
-  /**
-   * Rebuild gallery journal from metadata files
-   * This ensures the gallery is always consistent with downloaded images
-   */
-  static async rebuildGalleryFromMetadata(journal, metadataFolder, imageFolder) {
-    try {
-      // Read all metadata files
-      const browse = await FilePicker.browse('data', metadataFolder);
-      const metadataFiles = browse.files.filter(f => f.endsWith('.json'));
-
-      if (metadataFiles.length === 0) {
-        console.log('Quickbrush | No metadata files found');
-        return;
-      }
-
-      // Fetch all metadata
-      const allMetadata = [];
-      for (const metadataPath of metadataFiles) {
-        try {
-          const response = await fetch(metadataPath);
-          const metadata = await response.json();
-          allMetadata.push(metadata);
-        } catch (err) {
-          console.error(`Failed to read metadata ${metadataPath}:`, err);
-        }
-      }
-
-      // Sort by creation date (most recent first)
-      allMetadata.sort((a, b) => {
-        const dateA = new Date(a.created_at);
-        const dateB = new Date(b.created_at);
-        return dateB - dateA;
-      });
-
-      // Get or create the Images page
-      let page = journal.pages.find(p => p.name === 'Images');
-
-      if (!page) {
-        const pages = await journal.createEmbeddedDocuments('JournalEntryPage', [{
-          name: 'Images',
-          type: 'text',
-          text: { content: '', format: CONST.JOURNAL_ENTRY_PAGE_FORMATS.HTML },
-          sort: 1
-        }]);
-        page = pages[0];
-      }
-
-      // Build HTML content from metadata
-      const template = game.i18n.localize('QUICKBRUSH.Gallery.EntryTemplate');
-      let htmlContent = '';
-
-      for (const meta of allMetadata) {
-        const dateStr = new Date(meta.created_at).toLocaleString();
-        const title = meta.image_name ? `${meta.image_name} - ${dateStr}` : dateStr;
-        const type = (meta.generation_type || 'unknown').charAt(0).toUpperCase() + (meta.generation_type || 'unknown').slice(1);
-        const quality = (meta.quality || 'medium').charAt(0).toUpperCase() + (meta.quality || 'medium').slice(1);
-        const aspectRatio = meta.aspect_ratio || 'N/A';
-
-        const entry = template
-          .replace('{type}', type)
-          .replace('{date}', title)
-          .replace('{description}', meta.user_text || 'No description')
-          .replace('{quality}', quality)
-          .replace('{aspectRatio}', aspectRatio)
-          .replace('{imageUrl}', meta.image_path);
-
-        htmlContent += entry;
-      }
-
-      // Update the page content entirely
-      await page.update({ 'text.content': htmlContent });
-
-      console.log(`Quickbrush | Rebuilt gallery with ${allMetadata.length} images`);
-
-    } catch (error) {
-      console.error('Failed to rebuild gallery:', error);
-      throw error;
-    }
   }
 }
 
@@ -809,22 +533,26 @@ Hooks.once('init', () => {
   console.log('Quickbrush | Initializing module');
 
   // Register settings
-  game.settings.register(MODULE_ID, 'apiKey', {
-    name: game.i18n.localize('QUICKBRUSH.Settings.ApiKey.Name'),
-    hint: game.i18n.localize('QUICKBRUSH.Settings.ApiKey.Hint'),
+  game.settings.register(MODULE_ID, 'openaiApiKey', {
+    name: game.i18n.localize('QUICKBRUSH.Settings.OpenAIApiKey.Name'),
+    hint: game.i18n.localize('QUICKBRUSH.Settings.OpenAIApiKey.Hint'),
     scope: 'world',
     config: true,
     type: String,
     default: ''
   });
 
-  game.settings.register(MODULE_ID, 'apiUrl', {
-    name: game.i18n.localize('QUICKBRUSH.Settings.ApiUrl.Name'),
-    hint: game.i18n.localize('QUICKBRUSH.Settings.ApiUrl.Hint'),
+  game.settings.register(MODULE_ID, 'imageModel', {
+    name: game.i18n.localize('QUICKBRUSH.Settings.ImageModel.Name'),
+    hint: game.i18n.localize('QUICKBRUSH.Settings.ImageModel.Hint'),
     scope: 'world',
     config: true,
     type: String,
-    default: API_ENDPOINT
+    choices: {
+      'gpt-image-1-mini': game.i18n.localize('QUICKBRUSH.Settings.ImageModel.Choices.mini'),
+      'gpt-image-1': game.i18n.localize('QUICKBRUSH.Settings.ImageModel.Choices.standard')
+    },
+    default: 'gpt-image-1-mini'
   });
 
   game.settings.register(MODULE_ID, 'saveFolder', {
@@ -891,6 +619,12 @@ Hooks.on('renderJournalEntrySheet', (app, html) => {
   console.log('Quickbrush | Controls menu found:', $menu.length > 0);
 
   if ($menu.length === 0) return;
+
+  // Check if already added to prevent duplicates
+  if ($menu.find('[data-action^="quickbrush-"]').length > 0) {
+    console.log('Quickbrush | Already added to journal menu, skipping');
+    return;
+  }
 
   // Add Quickbrush submenu items
   const generationTypes = [
@@ -960,25 +694,18 @@ Hooks.on('renderJournalDirectory', (app, html) => {
   // In V13, html might be an HTMLElement, not jQuery, so wrap it
   const $html = html instanceof jQuery ? html : $(html);
 
-  const buttons = $(`
-    <button class="quickbrush-sync-btn">
-      <i class="fas fa-sync"></i> Quickbrush Sync
-    </button>
+  const button = $(`
     <button class="quickbrush-directory-btn">
       <i class="fas fa-palette"></i> ${game.i18n.localize('QUICKBRUSH.ButtonLabel')}
     </button>
   `);
 
-  buttons.filter('.quickbrush-directory-btn').on('click', function() {
+  button.on('click', function() {
     console.log('Quickbrush | Opening generation dialog from directory button');
     new QuickbrushDialog().render(true);
   });
 
-  buttons.filter('.quickbrush-sync-btn').on('click', async function() {
-    await QuickbrushGallery.syncFromLibrary();
-  });
-
-  $html.find('.directory-header .header-actions').append(buttons);
+  $html.find('.directory-header .header-actions').append(button);
 });
 
 /**
@@ -1211,17 +938,17 @@ function addQuickbrushToActorSheet(app, html, actorType) {
   }
 
   const isCharacter = actorType === 'character';
-  
+
   // Determine generation type based on creature type
   let generationType = isCharacter ? 'character' : 'creature';
-  
+
   // For NPCs, check if they're humanoid
   if (actorType === 'npc') {
     const creatureType = actor.system.details?.type?.value || '';
     const isHumanoid = creatureType.toLowerCase().includes('humanoid');
     generationType = isHumanoid ? 'character' : 'creature';
   }
-  
+
   const label = generationType === 'character' ? '🎭 Character' : '🐉 Creature';
   const icon = generationType === 'character' ? 'fa-user' : 'fa-dragon';
 
@@ -1463,7 +1190,6 @@ Hooks.on('renderItemSheet5e', (app, html) => {
 
 // Export for console access
 window.Quickbrush = {
-  API: QuickbrushAPI,
   Dialog: QuickbrushDialog,
   Gallery: QuickbrushGallery
 };

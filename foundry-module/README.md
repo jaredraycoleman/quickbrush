@@ -1,6 +1,6 @@
-# Quickbrush AI Image Generator for Foundry VTT
+# Quickbrush AI Image Generator for Foundry VTT (BYOK Edition)
 
-Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [Quickbrush](https://quickbrush.ai). Create characters, scenes, creatures, and items from your journal notes with just a few clicks!
+Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using your own OpenAI API key. Create characters, scenes, creatures, and items from your journal notes with just a few clicks!
 
 ![Quickbrush](https://quickbrush.ai/static/images/wispy.webp)
 
@@ -8,13 +8,14 @@ Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [
 
 ✨ **Generate Images Directly in Foundry**
 - Create characters, scenes, creatures, and items
-- Choose from low, medium, and high quality
-- Select square, landscape, or portrait aspect ratios
+- Choose from low, medium, and high quality (Standard or HD)
+- Select square, landscape, or portrait aspect ratios (up to 1536x1024)
 
 🎨 **Smart Journal Integration**
 - Add Quickbrush button to any journal page
 - One-click generation from journal text
 - Auto-populates description from journal content
+- Extract reference images from journal pages
 
 📚 **Automatic Gallery**
 - All images saved to `quickbrush-images` folder
@@ -22,10 +23,17 @@ Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [
 - Easy browsing and organization
 
 ⚡ **Powerful Options**
+- AI-powered description refinement with GPT-4o
 - Context prompts for fine-grained results
-- Quality control (1, 3, or 5 brushstrokes)
-- Multiple aspect ratios
-- Rate limit tracking
+- Reference images (up to 3) to guide generation
+- Auto-update character/item images
+- Quality control (Standard or HD)
+
+🎭 **Deep Foundry Integration**
+- Works with Character Sheets - extracts race, class, biography
+- Works with NPC Sheets - extracts type, CR, description
+- Works with Item Sheets - extracts rarity, properties, description
+- One-click generation from any sheet
 
 ## Installation
 
@@ -35,301 +43,223 @@ Generate stunning AI-powered fantasy RPG artwork directly in Foundry VTT using [
 2. Click **Install Module**
 3. Paste this manifest URL:
    ```
-   https://quickbrush.ai/foundry-module/module.json
+   https://quickbrush.ai/static/foundry-module/module.json
    ```
 4. Click **Install**
 
 ### Method 2: Manual Installation
 
-1. Download the latest release from [GitHub](https://github.com/quickbrush/foundry-module/releases)
-2. Extract to your Foundry `Data/modules/` directory
+1. Download the latest release
+2. Extract to your Foundry `Data/modules/quickbrush` directory
 3. Restart Foundry VTT
 4. Enable the module in your world
 
 ## Setup
 
-### 1. Get Your API Key
+### 1. Get Your OpenAI API Key
 
-1. Go to [Quickbrush Dashboard](https://quickbrush.ai/dashboard)
-2. Click on **"Manage API Keys"**
-3. Create a new API key
+1. Go to [OpenAI Platform](https://platform.openai.com/api-keys)
+2. Sign up or log in to your account
+3. Click **"Create new secret key"**
 4. Copy the key (you'll only see it once!)
+5. Add credits to your OpenAI account at [OpenAI Billing](https://platform.openai.com/account/billing)
 
 ### 2. Configure the Module
 
 1. In Foundry, go to **Game Settings** → **Configure Settings**
-2. Find **"Quickbrush AI Image Generator"** in the modules list
-3. Click **"Module Settings"**
-4. Paste your API key in the **"API Key"** field
-5. (Optional) Customize the save folder name
-
-![Settings Screenshot](docs/settings.png)
+2. Click **Module Settings** tab
+3. Find **"Quickbrush AI Image Generator (BYOK)"**
+4. Configure the following settings:
+   - **OpenAI API Key:** Paste your OpenAI API key
+   - **Image Model:** Choose between:
+     - `GPT-Image-1-Mini` (Default) - Faster and cheaper
+     - `GPT-Image-1` - Higher quality
+   - **Image Save Folder:** (Optional) Customize the folder name
+5. Click **Save Changes**
 
 ## Usage
 
-### Method 1: Scene Controls
-
-1. Click the **Notes** tool in the scene controls (left sidebar)
-2. Look for the **palette icon** (Quickbrush button)
-3. Click it to open the generation dialog
-4. Fill in your description and options
-5. Click **"Generate Image"**
-
-![Scene Controls](docs/scene-controls.png)
-
-### Method 2: Journal Button (Recommended!)
+### From Journal Pages
 
 1. Open any journal page
-2. Click the **"Quickbrush"** button in the header
-3. Select what type to generate (Character, Scene, Creature, or Item)
-4. The dialog opens with journal text pre-populated!
-5. Adjust and generate
+2. Click the **⋮** (controls) button in the header
+3. Select one of the Quickbrush options:
+   - 🎭 **Character** - For people and humanoids
+   - 🌄 **Scene** - For locations and environments
+   - 🐉 **Creature** - For monsters and beasts
+   - 🗡️ **Item** - For weapons, armor, and objects
+4. The dialog opens with journal text auto-extracted!
+5. Adjust settings and click **Generate Image**
 
-![Journal Button](docs/journal-button.png)
+### From Character Sheets
 
-### Generation Options
+1. Open any character or NPC sheet
+2. Click the **⋮** button in the header
+3. Select **Quickbrush**
+4. The dialog auto-fills with character details (name, race, class, bio)
+5. Check **"Auto-update image"** to set it as the character portrait
+6. Click **Generate Image**
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| **Type** | Character, Scene, Creature, or Item | Character |
-| **Description** | What you want to generate (required) | - |
-| **Context Prompt** | Additional context for fine-grained control (optional) | - |
-| **Quality** | Low (1), Medium (3), High (5 brushstrokes) | Medium |
-| **Aspect Ratio** | Square, Landscape, or Portrait | Smart default based on type |
+### From Item Sheets
+
+1. Open any item sheet
+2. Click the **⋮** button in the header
+3. Select **Quickbrush: Item**
+4. The dialog auto-fills with item details (name, type, rarity, description)
+5. Check **"Auto-update image"** to set it as the item icon
+6. Click **Generate Image**
+
+### From Journal Directory
+
+1. Go to the **Journal** tab
+2. Click the **🎨 Quickbrush** button in the header
+3. Manually enter your description
+4. Click **Generate Image**
+
+## Generation Options
+
+| Option | Description | Cost Impact |
+|--------|-------------|-------------|
+| **Type** | Character, Scene, Creature, or Item | None |
+| **Description** | What you want to generate (required) | None |
+| **Image Name** | Filename for the image | None |
+| **Context Prompt** | Additional context for fine-grained control (optional) | None |
+| **Quality** | Low/Medium (Standard) or High (HD) | ✅ Higher quality costs more |
+| **Aspect Ratio** | Square (1024x1024), Landscape (1792x1024), or Portrait (1024x1792) | ✅ Larger sizes cost more |
+| **Reference Images** | Up to 3 reference images (helps refine description) | None |
 
 **Smart Defaults:**
-- Scenes default to **landscape**
-- Everything else defaults to **square**
-
-## Examples
-
-### Character Example
-
-```
-Type: Character
-Description: [A long journal entry describing "Alith", his background, appearance, and personality]
-Context Prompt: Alith with a sad expression on his face
-Quality: High
-Aspect Ratio: Square
-```
-
-### Scene Example
-
-```
-Type: Scene
-Description: [A detailed journal entry describing a bustling medieval marketplace]
-Context Prompt: The marketplace burned to the ground in a devastating fire
-Quality: Medium
-Aspect Ratio: Landscape
-```
-
-### Creature Example
-
-```
-Type: Creature
-Description: A majestic dragon with emerald scales
-Context Prompt: Flying over mountains, dramatic clouds
-Quality: High
-Aspect Ratio: Landscape
-```
-
-## Gallery Management
-
-All generated images are automatically:
-
-1. **Saved** to the `quickbrush-images` folder (or your custom folder)
-2. **Added** to the "Quickbrush Gallery" journal
-3. **Organized** with metadata (type, date, quality, description)
-
-The gallery journal entry includes:
-- Image preview
-- Generation type and date
-- Original description
-- Quality and aspect ratio
-- Direct link to image
-
-## Rate Limiting
-
-Quickbrush enforces rate limits to ensure fair usage:
-
-- **Short-term**: 1 generation per 10 seconds
-- **Hourly**: 50 generations per hour
-
-If you hit a rate limit, the module will show a friendly error message telling you how long to wait.
-
-Check your current usage:
-```javascript
-const api = new Quickbrush.API();
-const status = await api.getRateLimitStatus();
-console.log(status);
-```
-
-## Brushstroke Costs
-
-Image generation costs brushstrokes based on quality:
-
-| Quality | Cost |
-|---------|------|
-| Low | 1 brushstroke |
-| Medium | 3 brushstrokes |
-| High | 5 brushstrokes |
-
-Purchase brushstrokes or subscribe at [Quickbrush Dashboard](https://quickbrush.ai/dashboard).
-
-## Troubleshooting
-
-### "Please set your Quickbrush API key"
-
-**Solution:** Go to Module Settings and add your API key from [quickbrush.ai/dashboard](https://quickbrush.ai/dashboard).
-
-### "Rate limit exceeded"
-
-**Solution:** Wait the specified time before generating another image. The rate limits are:
-- 1 per 10 seconds
-- 50 per hour
-
-### "Insufficient brushstrokes"
-
-**Solution:** You've run out of brushstrokes! Visit [Quickbrush Dashboard](https://quickbrush.ai/dashboard) to:
-- Purchase a brushstroke pack (never expires)
-- Subscribe for monthly allowances (best value!)
-
-### "Failed to generate image"
-
-**Possible causes:**
-1. Invalid API key
-2. Network connectivity issues
-3. Quickbrush API is down (check [status page](https://quickbrush.ai))
-
-**Debug:**
-```javascript
-// Test API connection
-const api = new Quickbrush.API();
-try {
-  const status = await api.getRateLimitStatus();
-  console.log('API working:', status);
-} catch (err) {
-  console.error('API error:', err);
-}
-```
-
-### Images not appearing in gallery
-
-1. Check if "Quickbrush Gallery" journal exists
-2. Verify images saved to `quickbrush-images` folder
-3. Check browser console for errors (F12)
-
-### Button not appearing on journal
-
-1. Make sure module is enabled for your world
-2. Refresh the page (F5)
-3. Check if you're on a V13+ Foundry version
-
-## API Reference
-
-The module exposes a global `Quickbrush` object for programmatic access:
-
-### Generate Image Programmatically
-
-```javascript
-const dialog = new Quickbrush.Dialog({
-  data: {
-    text: 'A mighty warrior',
-    generation_type: 'character',
-    quality: 'high',
-    aspect_ratio: 'square'
-  }
-});
-dialog.render(true);
-```
-
-### Check Rate Limits
-
-```javascript
-const api = new Quickbrush.API();
-const status = await api.getRateLimitStatus();
-console.log(`You have ${status.usage.hourly_remaining} generations remaining this hour`);
-```
-
-### Add to Gallery Manually
-
-```javascript
-await Quickbrush.Gallery.addToGallery({
-  imageUrl: 'path/to/image.webp',
-  type: 'character',
-  description: 'A brave knight',
-  prompt: 'In golden armor',
-  quality: 'high',
-  aspectRatio: 'square',
-  generationId: 'some-id',
-  refinedDescription: 'AI-enhanced description'
-});
-```
-
-## Settings
-
-| Setting | Description | Default |
-|---------|-------------|---------|
-| **API Key** | Your Quickbrush API key (required) | - |
-| **API URL** | Quickbrush API endpoint | `https://quickbrush.ai/api` |
-| **Image Save Folder** | Where images are saved | `quickbrush-images` |
-
-## Privacy & Security
-
-- Your API key is stored securely in Foundry's world settings
-- Only the GM needs to configure the API key
-- Images are stored locally in your Foundry data directory
-- API requests are sent directly to Quickbrush (HTTPS encrypted)
-
-## Support
-
-- **Documentation**: [https://quickbrush.ai/docs](https://quickbrush.ai/docs)
-- **Support Email**: [support@quickbrush.ai](mailto:support@quickbrush.ai)
-- **Bug Reports**: [GitHub Issues](https://github.com/quickbrush/foundry-module/issues)
-- **Discord**: [Join our server](https://discord.gg/quickbrush)
+- Scenes default to **Landscape** aspect ratio
+- Characters, Creatures, and Items default to **Square**
+- All default to **Medium** quality
 
 ## Pricing
 
-Quickbrush uses a brushstroke-based pricing model:
+Since you're using your own OpenAI API key, you pay OpenAI directly based on their pricing:
 
-**Subscriptions** (best value - 50% savings):
-- Basic: $5/mo - 250 brushstrokes/month
-- Pro: $10/mo - 500 brushstrokes/month
-- Premium: $20/mo - 1000 brushstrokes/month
-- Ultimate: $50/mo - 2500 brushstrokes/month
+### Model Pricing
 
-**One-Time Packs** (never expire):
-- Small: $10 - 250 brushstrokes
-- Medium: $20 - 500 brushstrokes
-- Large: $40 - 1000 brushstrokes
-- Mega: $100 - 2500 brushstrokes
+| Model | Quality | Size | Approx. Cost per Image |
+|-------|---------|------|------------------------|
+| **GPT-Image-1-Mini** (Default) | Standard | 1024x1024 | $0.015 |
+| **GPT-Image-1-Mini** | Standard | 1792x1024 or 1024x1792 | $0.030 |
+| **GPT-Image-1-Mini** | HD | 1024x1024 | $0.030 |
+| **GPT-Image-1-Mini** | HD | 1792x1024 or 1024x1792 | $0.045 |
+| **GPT-Image-1** | Standard | 1024x1024 | $0.040 |
+| **GPT-Image-1** | Standard | 1792x1024 or 1024x1792 | $0.080 |
+| **GPT-Image-1** | HD | 1024x1024 | $0.080 |
+| **GPT-Image-1** | HD | 1792x1024 or 1024x1792 | $0.120 |
 
-Learn more at [quickbrush.ai/dashboard](https://quickbrush.ai/dashboard)
+**Plus:**
+- **GPT-4o** (description refinement): $0.001-0.005 per generation
 
-## Changelog
+### Example Costs
 
-### Version 1.0.1 (2025-10-18)
-- Initial release
-- Image generation dialog
-- Journal integration
-- Automatic gallery
-- Rate limit handling
-- Quality and aspect ratio options
+**Using GPT-Image-1-Mini (Default):**
+- Standard Square image: **~$0.015**
+- HD Square image: **~$0.030**
+- HD Landscape/Portrait image: **~$0.045**
 
-## License
+**Using GPT-Image-1:**
+- Standard Square image: **~$0.040**
+- HD Square image: **~$0.080**
+- HD Landscape/Portrait image: **~$0.120**
 
-This module is provided under the MIT License. See LICENSE file for details.
+Check your usage at [OpenAI Platform Usage](https://platform.openai.com/usage).
 
-Quickbrush API and service are provided by Quickbrush ([quickbrush.ai](https://quickbrush.ai)).
+## Tips & Best Practices
+
+### Writing Good Descriptions
+
+✅ **Do:**
+- Include physical details (hair color, clothing, expression)
+- Mention the setting and mood
+- Be specific about what you want to see
+- Use descriptive adjectives
+
+❌ **Don't:**
+- Use names (the AI doesn't know characters by name)
+- Include story/lore details (focus on appearance)
+- Write overly complex instructions
+
+### Using Context Prompts
+
+Context prompts override the description for specific details:
+- **"wearing a red cloak"** - Changes outfit
+- **"smiling warmly"** - Changes expression
+- **"in a dark forest at night"** - Changes scene/mood
+- **"battle-damaged and worn"** - Changes condition
+
+### Using Reference Images
+
+Reference images help guide the style and appearance:
+- Character portraits from other sources
+- Existing Foundry images you want to match
+- Art style examples
+- Note: DALL-E 3 doesn't directly use reference images, but they help GPT-4o refine the description
+
+## Gallery
+
+All generated images are automatically:
+1. Saved to your configured folder (default: `quickbrush-images/`)
+2. Added to the **"Quickbrush Gallery"** journal
+3. Organized by date (newest first)
+4. Tagged with type, quality, and aspect ratio
+
+You can browse your gallery anytime by opening the "Quickbrush Gallery" journal.
+
+## Troubleshooting
+
+### "Please configure your OpenAI API key"
+
+**Solution:** Go to Module Settings and add your OpenAI API key.
+
+### "Failed to generate image: 401"
+
+**Solution:** Your API key is invalid or expired. Get a new one from OpenAI.
+
+### "Failed to generate image: 429"
+
+**Solution:** You've hit OpenAI's rate limit. Wait a minute and try again.
+
+### "Failed to generate image: Billing hard limit reached"
+
+**Solution:** Add more credits to your OpenAI account at [OpenAI Billing](https://platform.openai.com/account/billing).
+
+### Images take a long time to generate
+
+**Normal:** Image generation typically takes 10-60 seconds:
+- Step 1: GPT-4o refines your description (~5-10 seconds)
+- Step 2: GPT-Image generates the image (~5-50 seconds, depending on model and quality)
+
+You'll see progress notifications during generation.
+
+**Note:** GPT-Image-1-Mini is generally faster than GPT-Image-1.
+
+## Privacy & Security
+
+🔒 **Your API key is stored locally** in Foundry's world settings
+🔒 **Your data never goes through Quickbrush servers** - direct to OpenAI
+🔒 **All images are generated by OpenAI** (GPT-Image-1 or GPT-Image-1-Mini) according to their [content policy](https://openai.com/policies/usage-policies)
+🔒 **Your images are saved locally** to your Foundry data directory
+
+## Support
+
+- **Issues:** [GitHub Issues](https://github.com/jaredraycoleman/quickbrush/issues)
+- **Email:** support@quickbrush.ai
+- **Discord:** Coming soon!
 
 ## Credits
 
-**Module Author**: Quickbrush Team
-**Wispy (The Artist)**: Your friendly neighborhood halfling painter
-**Powered by**: OpenAI DALL-E and GPT-4
+Created by [Jared Coleman](https://github.com/jaredraycoleman)
+Powered by [OpenAI](https://openai.com) (GPT-Image-1, GPT-Image-1-Mini & GPT-4o)
+Built for [Foundry VTT](https://foundryvtt.com)
+
+## License
+
+MIT License - See LICENSE file for details
 
 ---
 
-Made with ❤️ by [Quickbrush](https://quickbrush.ai)
-
-*"Your adventure needs a splash of color!" — Wispy*
+**Happy adventuring, and may your campaigns be filled with beautiful art!**
+— Wispy Quickbrush 🎨✨
