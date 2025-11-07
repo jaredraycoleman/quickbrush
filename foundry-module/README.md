@@ -247,7 +247,6 @@ You'll see progress notifications during generation.
 
 - **Issues:** [GitHub Issues](https://github.com/jaredraycoleman/quickbrush/issues)
 - **Email:** support@quickbrush.ai
-- **Discord:** Coming soon!
 
 ## Credits
 
