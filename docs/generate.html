@@ -8,7 +8,7 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <link href="https://fonts.googleapis.com/css2?family=Marcellus+SC&family=Raleway:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <link rel="icon" type="image/x-icon" href="images/wispy.ico">
+  <link rel="icon" type="image/x-icon" href="images/paintbrush.ico">
   <style>
     .generation-preview {
       max-width: 100%;
@@ -75,13 +75,13 @@
           <h1 class="display-5 fw-bold mb-3">
             <i class="bi bi-palette-fill text-primary"></i> Generate Images
           </h1>
-          <p class="lead text-muted">Create fantasy RPG artwork using your OpenAI API key</p>
+          <p class="lead text-muted">Create fantasy RPG artwork with your OpenAI key (BYOK)</p>
         </div>
 
         <!-- API Key Configuration -->
         <div class="card shadow-sm mb-4" id="apiKeyCard">
           <div class="card-body">
-            <h5 class="card-title"><i class="bi bi-key"></i> API Key Configuration</h5>
+            <h5 class="card-title"><i class="bi bi-key"></i> API Key</h5>
             <div class="mb-3">
               <label for="apiKey" class="form-label">OpenAI API Key</label>
               <div class="input-group">
@@ -94,10 +94,7 @@
                   <i class="bi bi-check2"></i> Save
                 </button>
               </div>
-              <small class="form-text text-muted">
-                Your API key is stored locally in your browser and never sent to our servers.
-                Get your key from <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a>.
-              </small>
+              <small class="form-text text-muted">Stored locally—never transmitted. Get a key at <a href="https://platform.openai.com/api-keys" target="_blank">OpenAI</a>.</small>
             </div>
             <div class="alert alert-success d-none" id="apiKeyStatus">
               <i class="bi bi-check-circle"></i> API key configured
@@ -108,7 +105,7 @@
         <!-- Generation Form -->
         <div class="card shadow-sm mb-4">
           <div class="card-body">
-            <h5 class="card-title"><i class="bi bi-stars"></i> Create Your Image</h5>
+            <h5 class="card-title"><i class="bi bi-stars"></i> Generate</h5>
 
             <form id="generateForm">
               <!-- Generation Type -->
@@ -127,9 +124,7 @@
                 <label for="description" class="form-label">Description</label>
                 <textarea class="form-control" id="description" rows="4" required
                           placeholder="Describe what you want to generate..."></textarea>
-                <small class="form-text text-muted">
-                  Long-form text (e.g., journal entry, character background) that may contain irrelevant details. Focus will be on physical description.
-                </small>
+                <small class="form-text text-muted">Paste long text—Quickbrush extracts the visual description.</small>
               </div>
 
               <!-- Context Prompt (Optional) -->
@@ -139,9 +134,7 @@
                 </label>
                 <input type="text" class="form-control" id="contextPrompt"
                        placeholder="e.g., 'wearing a red cloak', 'in a defensive stance', 'at sunset'">
-                <small class="form-text text-muted">
-                  Specific instructions about what to focus on. This takes priority over the description above.
-                </small>
+                <small class="form-text text-muted">Short focus instructions (overrides extracted description details).</small>
               </div>
 
               <!-- Model Selection -->
@@ -180,9 +173,7 @@
                 </label>
                 <input type="file" class="form-control" id="referenceImages"
                        accept="image/*" multiple>
-                <small class="form-text text-muted">
-                  Upload up to 3 reference images to guide composition, style, and visual elements. Supported by GPT-Image-1 and GPT-Image-1-Mini.
-                </small>
+                <small class="form-text text-muted">Up to 3 images to anchor style/pose/colors.</small>
                 <div id="referencePreview" class="mt-2 d-flex gap-2 flex-wrap"></div>
               </div>
 
@@ -209,7 +200,7 @@
         <!-- Result -->
         <div class="card shadow-sm d-none" id="resultCard">
           <div class="card-body">
-            <h5 class="card-title"><i class="bi bi-image"></i> Generated Image</h5>
+            <h5 class="card-title"><i class="bi bi-image"></i> Result</h5>
             <div class="text-center">
               <img id="generatedImage" class="generation-preview mb-3" alt="Generated image">
               <div class="d-flex gap-2 justify-content-center">

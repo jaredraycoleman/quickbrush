@@ -1,14 +1,14 @@
 # @quickbrush/core
 
-Reusable image generation logic for Quickbrush across multiple platforms.
+Shared image generation logic for Quickbrush. Built by Wizzlethorpe Labs.
 
 ## Overview
 
-This package contains the core business logic for generating AI-powered fantasy RPG artwork using OpenAI's APIs. It's designed to be platform-agnostic and can be used in:
+This package contains the core business logic for generating AI-powered fantasy RPG artwork using OpenAI's APIs. Platform-agnostic design supports:
 
-- **Web applications** (static HTML)
+- **Web applications**
 - **Foundry VTT modules**
-- **Obsidian plugins** (future BYOK implementation)
+- **Obsidian plugins**
 - Any JavaScript/TypeScript project
 
 ## Installation

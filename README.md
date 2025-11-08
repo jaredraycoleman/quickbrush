@@ -1,6 +1,6 @@
 # Quickbrush
 
-AI-powered fantasy RPG artwork generator for multiple platforms.
+AI-powered fantasy RPG artwork for Foundry VTT, Obsidian, and the web. Built by Wizzlethorpe Labs.
 
 ## Project Structure
 
@@ -12,7 +12,7 @@ quickbrush/
 │   └── quickbrush-core/          # Shared image generation logic
 ├── foundry-module/               # Foundry VTT module
 ├── quickbrush-obsidian-plugin/   # Obsidian plugin
-├── docs/                         # Static website (quickbrush.ai)
+├── docs/                         # Static website
 └── scripts/                      # Build and sync scripts
 ```
 
@@ -184,4 +184,4 @@ MIT
 
 ## Support
 
-For issues or questions, visit [quickbrush.ai](https://quickbrush.ai)
+For issues or questions, visit [quickbrush.wizzlethorpe.com](https://quickbrush.wizzlethorpe.com)

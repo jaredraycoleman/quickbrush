@@ -1,7 +1,7 @@
 {
   "id": "quickbrush",
   "title": "Quickbrush Image Generator",
-  "description": "Generate AI-powered fantasy RPG artwork directly in Foundry VTT using your own OpenAI API key. Create characters, scenes, creatures, and items from your journal notes.",
+  "description": "Generate AI fantasy art directly in Foundry VTT. BYOK (Bring Your Own OpenAI Key). A Wizzlethorpe Labs tool.",
   "version": "2.2.1",
   "compatibility": {
     "minimum": "13.0",

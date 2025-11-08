@@ -3,12 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-  <title>Quickbrush - AI Fantasy RPG Art for Foundry VTT</title>
+  <title>Quickbrush by Wizzlethorpe Labs</title>
   <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.css">
   <link href="https://fonts.googleapis.com/css2?family=Marcellus+SC&family=Raleway:wght@400;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
-  <link rel="icon" type="image/x-icon" href="images/wispy.ico">
+  <link rel="icon" type="image/x-icon" href="images/paintbrush.ico">
   <!-- Open Graph -->
   <meta property="og:title" content="Quickbrush - AI Fantasy RPG Art">
   <meta property="og:description" content="Generate AI-powered fantasy RPG artwork directly in Foundry VTT using your own OpenAI API key.">
@@ -60,55 +60,56 @@
           <h1 class="display-4 fw-bold mb-3">
             <i class="bi bi-brush-fill text-primary"></i> Quickbrush
           </h1>
-          <p class="lead text-muted">Where Wispy Quickbrush's creativity meets a sprinkle of AI magic!</p>
+          <p class="lead text-muted">AI-powered fantasy art for TTRPGs. Bring Your Own Key. Built by Wizzlethorpe Labs.</p>
+          <div class="d-flex gap-2 justify-content-center mt-3">
+            <a href="generate.html" class="btn btn-primary btn-lg">
+              <i class="bi bi-palette-fill"></i> Try the Generator
+            </a>
+            <a href="showcase.html" class="btn btn-outline-primary btn-lg">
+              <i class="bi bi-stars"></i> View Showcase
+            </a>
+          </div>
         </div>
 
-        <!-- Main Content -->
+        <!-- What Is Quickbrush (concise) -->
         <div class="card shadow-sm mb-4">
           <div class="card-body p-5">
-            <div class="row">
-              <div class="col-md-8">
-                <h2 class="h3 mb-4">A Message from Wispy Quickbrush</h2>
-
-                <p class="lead">
-                  "Oh! Hello there! I'm <strong>Wispy Quickbrush</strong>—a halfling artist who believes every splash of color tells a story.
-                  I adore bringing imagination to life, whether it's on canvas, parchment, or pixels!"
-                </p>
+            <h2 class="h3 mb-3">What is Quickbrush?</h2>
+            <p class="mb-4">Quickbrush is a BYOK image generator for tabletop RPGs. Use your OpenAI API key to create <strong>characters</strong>, <strong>scenes</strong>, <strong>creatures</strong>, and <strong>items</strong>—in the browser or directly inside Foundry VTT.</p>
+            <div class="row g-4">
+              <div class="col-md-3">
+                <div class="card h-100 border-0 bg-light">
+                  <div class="card-body">
+                    <h3 class="h6"><i class="bi bi-shield-lock"></i> Your Key</h3>
+                    <p class="small text-muted mb-0">Privacy-first: your API key stays in your browser or Foundry settings.</p>
+                  </div>
+                </div>
               </div>
-              <div class="col-md-4 text-center">
-                <img src="images/wispy.webp"
-                     alt="Wispy Quickbrush - Artist"
-                     class="img-fluid rounded-circle shadow-sm"
-                     style="max-width: 200px;">
-                <p class="text-muted mt-2 small">
-                  <em>Wispy Quickbrush</em><br>
-                  Halfling Artist & Free Spirit
-                </p>
+              <div class="col-md-3">
+                <div class="card h-100 border-0 bg-light">
+                  <div class="card-body">
+                    <h3 class="h6"><i class="bi bi-aspect-ratio"></i> Flexible</h3>
+                    <p class="small text-muted mb-0">Pick aspect ratios, quality, and add reference images for consistency.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="card h-100 border-0 bg-light">
+                  <div class="card-body">
+                    <h3 class="h6"><i class="bi bi-lightning-charge"></i> Fast</h3>
+                    <p class="small text-muted mb-0">Optimized prompts produce results in seconds.</p>
+                  </div>
+                </div>
+              </div>
+              <div class="col-md-3">
+                <div class="card h-100 border-0 bg-light">
+                  <div class="card-body">
+                    <h3 class="h6"><i class="bi bi-window-stack"></i> Multiplatform</h3>
+                    <p class="small text-muted mb-0">Use the web demo or the Foundry VTT module.</p>
+                  </div>
+                </div>
               </div>
             </div>
-
-            <p>
-              I've wandered across cozy villages and sparkling cities, painting everything that made my heart flutter—heroes,
-              dragons, and even a few shy goblins who posed quite nicely (once they stopped hiding). But art takes time,
-              and I wanted to share a way for *everyone* to bring their imagination to life.
-            </p>
-
-            <p>
-              So, with the help of some clever inventors, I created <strong>Quickbrush</strong>—a magical tool powered by what
-              they call "artificial intelligence." I like to think of it as a friendly little art sprite who helps me
-              turn your ideas into pictures. (Don't worry, they're treated very well!)
-            </p>
-
-            <hr class="my-4">
-
-            <h2 class="h3 mb-4">What Is Quickbrush?</h2>
-
-            <p>
-              <strong>Quickbrush</strong> is a Bring Your Own Key (BYOK) tool that lets you generate AI-powered fantasy RPG artwork
-              directly in Foundry VTT using your own OpenAI API key. Whether you're a Dungeon Master crafting
-              a scene, a player dreaming up your next character, or simply someone who loves the wonder of creation—
-              Quickbrush is here to help you make something beautiful.
-            </p>
 
             <div class="row g-4 my-4">
               <div class="col-md-6">
@@ -169,44 +170,30 @@
             <h2 class="h3 mb-4">How Does It Work?</h2>
 
             <div class="alert alert-info">
-              <p class="mb-2">
-                <strong><i class="bi bi-brush"></i> Using Your Own OpenAI API Key</strong>
-              </p>
-              <p class="mb-0">
-                Quickbrush is a BYOK (Bring Your Own Key) tool. You'll use your own OpenAI API key, giving you full control
-                over costs and usage. The module supports both GPT-Image-1-Mini (faster, cheaper) and GPT-Image-1 (higher quality) models.
-              </p>
+              <p class="mb-2"><strong><i class="bi bi-key"></i> Bring Your Own Key</strong></p>
+              <p class="mb-0">Use your OpenAI API key to control costs and privacy. Supports GPT-Image-1-Mini (fast) and GPT-Image-1 (high quality).</p>
             </div>
 
-            <p>
-              Simply install the Foundry VTT module, configure your OpenAI API key in the settings, and start creating!
-              Describe your vision, pick your quality level and model, and let Quickbrush do the rest.
-              In moments, you'll have something unique—art that feels like it came right out of your imagination.
-            </p>
+            <ol class="mt-3">
+              <li>Describe what you want to see (long text works—Quickbrush extracts the visuals).</li>
+              <li>Optionally add a short context prompt and up to 3 reference images.</li>
+              <li>Pick quality and aspect ratio. Generate. Done.</li>
+            </ol>
 
             <div class="text-center my-4">
-              <a href="showcase.html" class="btn btn-primary btn-lg">
-                <i class="bi bi-stars"></i> View Showcase
-              </a>
-              <a href="generate.html" class="btn btn-outline-primary btn-lg">
-                <i class="bi bi-palette-fill"></i> Try Generator
-              </a>
+              <a href="generate.html" class="btn btn-primary btn-lg"><i class="bi bi-palette-fill"></i> Try Generator</a>
+              <a href="showcase.html" class="btn btn-outline-primary btn-lg"><i class="bi bi-stars"></i> View Showcase</a>
             </div>
 
             <!-- Ethics & Artists Callout -->
             <div class="alert alert-secondary border-0 mb-5" style="background: #f4f2ff;">
               <div class="d-flex flex-column flex-md-row align-items-start align-items-md-center gap-3">
                 <div class="flex-grow-1">
-                  <h3 class="h5 mb-2">Our commitment to artists</h3>
-                  <p class="mb-0 text-muted">
-                    We built Quickbrush to complement, not replace, human creativity. Learn how we protect artist styles,
-                    limit commercial use, and encourage hiring professionals.
-                  </p>
+                  <h3 class="h5 mb-2">AI & Artists</h3>
+                  <p class="mb-0 text-muted">We design Quickbrush to complement—not replace—human creativity. Read our policy.</p>
                 </div>
                 <div>
-                  <a href="ai-and-artists.html" class="btn btn-primary">
-                    <i class="bi bi-heart"></i> Read AI & Artists
-                  </a>
+                  <a href="ai-and-artists.html" class="btn btn-primary"><i class="bi bi-heart"></i> Read Policy</a>
                 </div>
               </div>
             </div>
@@ -233,32 +220,7 @@
 
             <hr class="my-4">
 
-            <h2 class="h3 mb-4">The Fine Print (But Make It Whimsical)</h2>
-
-            <p>
-              I may not paint every picture by hand (I'd never sleep again!), but <strong>Quickbrush</strong> uses advanced
-              AI tools inspired by my artistic touch. Think of it as a magical collaboration between
-              halfling creativity and modern wizardry.
-            </p>
-
-            <p>
-              <strong>Perfect for:</strong>
-            </p>
-            <ul>
-              <li>Tabletop RPG players and Dungeon Masters</li>
-              <li>Fantasy writers seeking visual inspiration</li>
-              <li>Worldbuilders and dreamers of every kind</li>
-              <li>Anyone who wants to see their imagination come alive in color!</li>
-            </ul>
-
-            <p class="text-muted mt-4">
-              <em>
-                "Art is the heart's way of speaking. Don't be afraid to let yours sing in color."
-              </em>
-            </p>
-            <p class="text-end text-muted mb-0">
-              — Wispy Quickbrush, Halfling Artist & Free Spirit
-            </p>
+            <!-- Trimmed whimsical section removed for concise branding -->
           </div>
         </div>
       </div>
