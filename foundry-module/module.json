@@ -2,7 +2,7 @@
   "id": "quickbrush",
   "title": "Quickbrush Image Generator",
   "description": "Generate AI fantasy art directly in Foundry VTT. BYOK (Bring Your Own OpenAI Key). A Wizzlethorpe Labs tool.",
-  "version": "2.2.3",
+  "version": "2.2.4",
   "compatibility": {
     "minimum": "13.0",
     "verified": "13.0"
@@ -29,7 +29,7 @@
   ],
   "url": "https://quickbrush.wizzlethorpe.com",
   "manifest": "https://github.com/wizzlethorpe/quickbrush/releases/latest/download/module.json",
-  "download": "https://github.com/wizzlethorpe/quickbrush/releases/latest/download/quickbrush-foundry.zip",
+  "download": "https://github.com/wizzlethorpe/quickbrush/releases/latest/download/module.zip",
   "license": "LICENSE",
   "readme": "README.md",
   "bugs": "https://github.com/wizzlethorpe/quickbrush/issues",
