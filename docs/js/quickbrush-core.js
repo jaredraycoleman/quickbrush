@@ -147,8 +147,7 @@ class OpenAIClient {
       size,
       quality,
       background,
-      n: 1,
-      response_format: 'b64_json'
+      n: 1
     };
 
     const response = await this._imageGeneration(params);
