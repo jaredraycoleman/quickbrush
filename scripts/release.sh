@@ -141,7 +141,7 @@ echo ""
 print_warn "About to create release with the following details:"
 echo "  Platform: $platform_choice"
 [ "$platform_choice" != "2" ] && echo "  Foundry: v$NEW_FOUNDRY_VERSION"
-[ "$platform_choice" != "1" ] && echo "  Obsidian: v$NEW_OBSIDIAN_VERSION"
+[ "$platform_choice" != "1" ] && echo "  Obsidian: $NEW_OBSIDIAN_VERSION"
 echo ""
 read -p "Continue? (y/N): " confirm
 
@@ -229,7 +229,7 @@ if [ "$platform_choice" == "2" ] || [ "$platform_choice" == "3" ]; then
     print_info "Committing Obsidian submodule changes..."
     cd quickbrush-obsidian-plugin
     git add manifest.json versions.json
-    git commit -m "chore: Bump version to v$NEW_OBSIDIAN_VERSION"
+    git commit -m "chore: Bump version to $NEW_OBSIDIAN_VERSION"
     git push
     cd "$PROJECT_ROOT"
 
@@ -241,9 +241,9 @@ fi
 if [ "$platform_choice" == "1" ]; then
     git commit -m "chore: Release Foundry module v$NEW_FOUNDRY_VERSION"
 elif [ "$platform_choice" == "2" ]; then
-    git commit -m "chore: Update Obsidian plugin to v$NEW_OBSIDIAN_VERSION"
+    git commit -m "chore: Update Obsidian plugin to $NEW_OBSIDIAN_VERSION"
 else
-    git commit -m "chore: Release v$NEW_FOUNDRY_VERSION / Obsidian v$NEW_OBSIDIAN_VERSION"
+    git commit -m "chore: Release v$NEW_FOUNDRY_VERSION / Obsidian $NEW_OBSIDIAN_VERSION"
 fi
 
 # Push changes
@@ -269,8 +269,8 @@ if [ "$platform_choice" == "2" ] || [ "$platform_choice" == "3" ]; then
     # Create release in the submodule repository
     cd quickbrush-obsidian-plugin
 
-    gh release create "v$NEW_OBSIDIAN_VERSION" \
-        --title "v$NEW_OBSIDIAN_VERSION" \
+    gh release create "$NEW_OBSIDIAN_VERSION" \
+        --title "$NEW_OBSIDIAN_VERSION" \
         --notes "$release_notes" \
         "../releases/quickbrush-obsidian-v$NEW_OBSIDIAN_VERSION.zip" \
         "main.js#main.js" \
@@ -279,7 +279,7 @@ if [ "$platform_choice" == "2" ] || [ "$platform_choice" == "3" ]; then
 
     cd "$PROJECT_ROOT"
 
-    print_info "✓ Obsidian release created: v$NEW_OBSIDIAN_VERSION"
+    print_info "✓ Obsidian release created: $NEW_OBSIDIAN_VERSION"
 fi
 
 # Cleanup
@@ -303,6 +303,6 @@ if [ "$platform_choice" == "2" ] || [ "$platform_choice" == "3" ]; then
     cd "$PROJECT_ROOT"
 
     print_info "Obsidian Plugin:"
-    print_info "  Version: v$NEW_OBSIDIAN_VERSION"
-    print_info "  Release: https://github.com/$OBSIDIAN_REPO/releases/tag/v$NEW_OBSIDIAN_VERSION"
+    print_info "  Version: $NEW_OBSIDIAN_VERSION"
+    print_info "  Release: https://github.com/$OBSIDIAN_REPO/releases/tag/$NEW_OBSIDIAN_VERSION"
 fi
