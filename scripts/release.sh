@@ -170,13 +170,11 @@ if [ "$platform_choice" == "1" ] || [ "$platform_choice" == "3" ]; then
     print_info "Preparing Foundry release files..."
     cp -r foundry-module/* "$FOUNDRY_RELEASE_DIR/"
 
-    # Create zip file with both versioned and generic names
+    # Create zip file with generic name for /latest/download/ URL
     cd "$PROJECT_ROOT/releases"
-    zip -r "quickbrush-foundry-v$NEW_FOUNDRY_VERSION.zip" "foundry-v$NEW_FOUNDRY_VERSION"
-    # Also create a copy with the generic name for /latest/download/ URL
-    cp "quickbrush-foundry-v$NEW_FOUNDRY_VERSION.zip" "quickbrush-foundry.zip"
+    zip -r "module.zip" "foundry-v$NEW_FOUNDRY_VERSION"
 
-    print_info "Created Foundry release zip: quickbrush-foundry-v$NEW_FOUNDRY_VERSION.zip"
+    print_info "Created Foundry release zip: module.zip"
 
     cd "$PROJECT_ROOT"
 fi
@@ -259,8 +257,7 @@ if [ "$platform_choice" == "1" ] || [ "$platform_choice" == "3" ]; then
     gh release create "foundry-v$NEW_FOUNDRY_VERSION" \
         --title "Foundry Module v$NEW_FOUNDRY_VERSION" \
         --notes "$release_notes" \
-        "releases/quickbrush-foundry-v$NEW_FOUNDRY_VERSION.zip" \
-        "releases/quickbrush-foundry.zip#quickbrush-foundry.zip" \
+        "releases/module.zip#module.zip" \
         "foundry-module/module.json#module.json"
 
     print_info "✓ Foundry release created: foundry-v$NEW_FOUNDRY_VERSION"
