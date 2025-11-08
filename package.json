@@ -14,7 +14,9 @@
     "build:obsidian": "cd quickbrush-obsidian-plugin && npm run build",
     "build:docs": "npm run sync-core && echo 'Docs (website) ready (uses bundled core)'",
     "build:all": "npm run sync-core && npm run build:obsidian",
-    "release": "bash scripts/release.sh"
+    "release": "bash scripts/release.sh",
+    "publish:foundry": "node scripts/publish-foundry.js",
+    "publish:foundry:dry-run": "node scripts/publish-foundry.js --dry-run"
   },
   "keywords": [
     "quickbrush",
