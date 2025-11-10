@@ -131,11 +131,11 @@ class QuickbrushDialog extends FormApplication {
     const fp = new FilePicker({
       type: 'image',
       callback: (path) => {
-        if (this.referenceImages.length < 3) {
+        if (this.referenceImages.length < 4) {
           this.referenceImages.push(path);
           this.render();
         } else {
-          ui.notifications.warn('Maximum 3 reference images allowed', { permanent: false });
+          ui.notifications.warn('Maximum 4 reference images allowed', { permanent: false });
         }
       }
     });
@@ -368,7 +368,7 @@ class QuickbrushGallery {
             </ul>
           </li>
           <li><strong>Aspect Ratio:</strong> Square (1024x1024), Landscape (1536x1024), or Portrait (1024x1536)</li>
-          <li><strong>Reference Images:</strong> Upload up to 3 reference images to guide the composition, style, and visual elements. Both GPT-Image-1 and GPT-Image-1-Mini support reference images to help create art that matches your vision!</li>
+          <li><strong>Reference Images:</strong> Upload up to 4 reference images to guide the composition, style, and visual elements. Both GPT-Image-1 and GPT-Image-1-Mini support reference images to help create art that matches your vision!</li>
           <li><strong>Auto-Update:</strong> When generating from a character/item sheet, check this to automatically set the image</li>
         </ul>
 
@@ -664,13 +664,13 @@ Hooks.on('renderJournalEntrySheet', (app, html) => {
     menuItem.find('button').on('click', () => {
       const textContent = extractVisibleJournalText($html);
 
-      // Extract first 3 images from journal
+      // Extract first 4 images from journal
       const referenceImages = [];
       const $visiblePages = $html.find('article.journal-entry-page');
       $visiblePages.each(function() {
-        if (referenceImages.length < 3) {
+        if (referenceImages.length < 4) {
           $(this).find('.journal-page-content img').each(function() {
-            if (referenceImages.length < 3) {
+            if (referenceImages.length < 4) {
               const src = $(this).attr('src');
               if (src) {
                 referenceImages.push(src);
