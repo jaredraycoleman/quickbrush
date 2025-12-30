@@ -16,7 +16,9 @@
     "build:all": "npm run sync-core && npm run build:obsidian",
     "release": "bash scripts/release.sh",
     "publish:foundry": "node scripts/publish-foundry.js",
-    "publish:foundry:dry-run": "node scripts/publish-foundry.js --dry-run"
+    "publish:foundry:dry-run": "node scripts/publish-foundry.js --dry-run",
+    "cli": "node packages/quickbrush-cli/bin/quickbrush.mjs",
+    "generate": "node packages/quickbrush-cli/bin/quickbrush.mjs"
   },
   "keywords": [
     "quickbrush",
