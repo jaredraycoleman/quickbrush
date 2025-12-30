@@ -536,6 +536,9 @@ function extractVisibleJournalText(html) {
       }
     });
 
+    // Strip DM-only blocks (:::dm ... :::)
+    textContent = stripDMBlocks(textContent);
+
     // Limit to maximum allowed length (10000 characters)
     textContent = textContent.substring(0, 10000).trim();
   }
@@ -743,10 +746,24 @@ function stripHTML(html) {
 }
 
 /**
+ * Strip DM-only content blocks (:::dm ... :::) from text
+ */
+function stripDMBlocks(text) {
+  if (!text) return '';
+
+  // Remove :::dm ... ::: blocks (multiline)
+  // Match :::dm followed by anything until the next ::: on its own line
+  return text.replace(/:::dm[\s\S]*?:::/g, '');
+}
+
+/**
  * Resolve Foundry @Embed tags and enrich text
  */
 async function enrichAndStripText(text) {
   if (!text) return '';
+
+  // First, strip DM-only blocks before any processing
+  text = stripDMBlocks(text);
 
   try {
     // Use Foundry's TextEditor to enrich the text (resolves @Embed, @UUID, etc.)
